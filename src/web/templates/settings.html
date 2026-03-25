@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block content %}
+<form method="POST" action="/settings">
+    {% if saved %}
+    <div style="background:#1e3a1e;color:#4caf50;padding:.75rem 1rem;border-radius:8px;margin-bottom:1rem;">
+        ✅ Einstellungen gespeichert.
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <h2>🤖 GPT-Coach</h2>
+        <div style="display:grid;gap:.75rem;">
+            <label>
+                Kontext-Tage (wie viele Tage werden an GPT gesendet)
+                <select name="gpt_context_days" style="display:block;width:100%;margin-top:.25rem;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:6px;padding:.4rem;">
+                    <option value="7" {% if settings.gpt_context_days == '7' %}selected{% endif %}>7 Tage</option>
+                    <option value="14" {% if settings.gpt_context_days == '14' %}selected{% endif %}>14 Tage</option>
+                    <option value="30" {% if settings.gpt_context_days == '30' %}selected{% endif %}>30 Tage</option>
+                </select>
+            </label>
+            <label>
+                Maximale GPT-Tokens (Länge der Coach-Antwort)
+                <select name="gpt_max_tokens" style="display:block;width:100%;margin-top:.25rem;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:6px;padding:.4rem;">
+                    <option value="500" {% if settings.gpt_max_tokens == '500' %}selected{% endif %}>500 (kurz)</option>
+                    <option value="1000" {% if settings.gpt_max_tokens == '1000' %}selected{% endif %}>1000 (normal)</option>
+                    <option value="2000" {% if settings.gpt_max_tokens == '2000' %}selected{% endif %}>2000 (ausführlich)</option>
+                </select>
+            </label>
+            <label>
+                Kreativität (temperature)
+                <select name="gpt_temperature" style="display:block;width:100%;margin-top:.25rem;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:6px;padding:.4rem;">
+                    <option value="0.3" {% if settings.gpt_temperature == '0.3' %}selected{% endif %}>0.3 (präzise)</option>
+                    <option value="0.4" {% if settings.gpt_temperature == '0.4' %}selected{% endif %}>0.4 (ausgewogen)</option>
+                    <option value="0.5" {% if settings.gpt_temperature == '0.5' %}selected{% endif %}>0.5 (kreativ)</option>
+                </select>
+            </label>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;">
+                <label style="display:flex;align-items:center;gap:.5rem;">
+                    <input type="hidden" name="gpt_include_activities" value="false">
+                    <input type="checkbox" name="gpt_include_activities" value="true"
+                        {% if settings.gpt_include_activities != 'false' %}checked{% endif %}>
+                    Aktivitäten einbeziehen
+                </label>
+                <label style="display:flex;align-items:center;gap:.5rem;">
+                    <input type="hidden" name="gpt_include_blood_pressure" value="false">
+                    <input type="checkbox" name="gpt_include_blood_pressure" value="true"
+                        {% if settings.gpt_include_blood_pressure != 'false' %}checked{% endif %}>
+                    Blutdruck einbeziehen
+                </label>
+                <label style="display:flex;align-items:center;gap:.5rem;">
+                    <input type="hidden" name="gpt_include_body_composition" value="false">
+                    <input type="checkbox" name="gpt_include_body_composition" value="true"
+                        {% if settings.gpt_include_body_composition != 'false' %}checked{% endif %}>
+                    Körperzusammensetzung
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>📅 Analyse</h2>
+        <div style="display:grid;gap:.75rem;">
+            <label>
+                Analyse-Modus
+                <select name="analysis_mode" style="display:block;width:100%;margin-top:.25rem;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:6px;padding:.4rem;">
+                    <option value="manual" {% if settings.analysis_mode == 'manual' %}selected{% endif %}>Manuell (nur auf Anfrage)</option>
+                    <option value="scheduled" {% if settings.analysis_mode == 'scheduled' %}selected{% endif %}>Automatisch (täglich)</option>
+                </select>
+            </label>
+            <label>
+                Analyse-Uhrzeit (bei "Automatisch")
+                <input type="time" name="analysis_time" value="{{ settings.analysis_time }}"
+                    style="display:block;width:100%;margin-top:.25rem;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:6px;padding:.4rem;">
+            </label>
+            <label style="display:flex;align-items:center;gap:.5rem;">
+                <input type="hidden" name="weekly_report_enabled" value="false">
+                <input type="checkbox" name="weekly_report_enabled" value="true"
+                    {% if settings.weekly_report_enabled == 'true' %}checked{% endif %}>
+                Wöchentlicher Report aktiviert
+            </label>
+            <label>
+                Wochenbericht-Tag
+                <select name="weekly_report_day" style="display:block;width:100%;margin-top:.25rem;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:6px;padding:.4rem;">
+                    {% for day, label in [('monday','Montag'),('tuesday','Dienstag'),('wednesday','Mittwoch'),('thursday','Donnerstag'),('friday','Freitag'),('saturday','Samstag'),('sunday','Sonntag')] %}
+                    <option value="{{ day }}" {% if settings.weekly_report_day == day %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>📤 Ausgabe-Kanäle</h2>
+        <div style="display:grid;gap:.5rem;">
+            <label style="display:flex;align-items:center;gap:.5rem;">
+                <input type="checkbox" disabled checked> Web-UI (immer aktiv)
+            </label>
+            <label style="display:flex;align-items:center;gap:.5rem;">
+                <input type="hidden" name="output_email" value="false">
+                <input type="checkbox" name="output_email" value="true"
+                    {% if settings.output_email != 'false' %}checked{% endif %}>
+                E-Mail-Report (SMTP aus Addon-Config)
+            </label>
+            <label style="display:flex;align-items:center;gap:.5rem;">
+                <input type="hidden" name="output_push" value="false">
+                <input type="checkbox" name="output_push" value="true"
+                    {% if settings.output_push != 'false' %}checked{% endif %}>
+                Push-Benachrichtigung (iPhone)
+            </label>
+            <label style="display:flex;align-items:center;gap:.5rem;">
+                <input type="hidden" name="output_ha_sensor" value="false">
+                <input type="checkbox" name="output_ha_sensor" value="true"
+                    {% if settings.output_ha_sensor != 'false' %}checked{% endif %}>
+                HA-Sensor-Entities aktualisieren
+            </label>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>🔔 Alerts</h2>
+        <div style="display:grid;gap:.75rem;">
+            <label>
+                Body Battery Alarm-Schwelle (Push wenn unter Wert)
+                <select name="alert_body_battery_threshold" style="display:block;width:100%;margin-top:.25rem;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:6px;padding:.4rem;">
+                    {% for v in [20, 25, 30, 40] %}
+                    <option value="{{ v }}" {% if settings.alert_body_battery_threshold == v|string %}selected{% endif %}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Alarm bei sinkendem Body Battery (Tage)
+                <select name="alert_declining_battery_days" style="display:block;width:100%;margin-top:.25rem;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:6px;padding:.4rem;">
+                    <option value="3" {% if settings.alert_declining_battery_days == '3' %}selected{% endif %}>3 Tage</option>
+                    <option value="5" {% if settings.alert_declining_battery_days == '5' %}selected{% endif %}>5 Tage</option>
+                    <option value="7" {% if settings.alert_declining_battery_days == '7' %}selected{% endif %}>7 Tage</option>
+                </select>
+            </label>
+            <label style="display:flex;align-items:center;gap:.5rem;">
+                <input type="hidden" name="alert_new_pr" value="false">
+                <input type="checkbox" name="alert_new_pr" value="true"
+                    {% if settings.alert_new_pr != 'false' %}checked{% endif %}>
+                Push bei neuer Bestleistung
+            </label>
+            <label>
+                Rennen-Countdown Push (Tage vorher)
+                <select name="alert_race_countdown_days" style="display:block;width:100%;margin-top:.25rem;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:6px;padding:.4rem;">
+                    <option value="7" {% if settings.alert_race_countdown_days == '7' %}selected{% endif %}>7 Tage</option>
+                    <option value="14" {% if settings.alert_race_countdown_days == '14' %}selected{% endif %}>14 Tage</option>
+                </select>
+            </label>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>⚙️ Sammlung</h2>
+        <div style="display:grid;gap:.75rem;">
+            <label>
+                Sammel-Modus
+                <select name="collection_mode" style="display:block;width:100%;margin-top:.25rem;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:6px;padding:.4rem;">
+                    <option value="auto" {% if settings.collection_mode == 'auto' %}selected{% endif %}>Automatisch (täglich)</option>
+                    <option value="manual" {% if settings.collection_mode == 'manual' %}selected{% endif %}>Nur manuell</option>
+                </select>
+            </label>
+            <label>
+                Sammel-Uhrzeit
+                <input type="time" name="collection_time" value="{{ settings.collection_time }}"
+                    style="display:block;width:100%;margin-top:.25rem;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:6px;padding:.4rem;">
+            </label>
+        </div>
+    </div>
+
+    <button type="submit"
+        style="background:var(--accent);color:white;border:none;padding:.75rem 2rem;border-radius:8px;font-size:1rem;cursor:pointer;margin-top:.5rem;">
+        💾 Einstellungen speichern
+    </button>
+</form>
+{% endblock %}

@@ -1,7 +1,7 @@
 """Web-Routen — Dashboard, Manual/MFA-Seite, Collection-Trigger."""
 import logging
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
@@ -73,3 +73,27 @@ async def trigger_collection(request: Request):
     trigger_collection_now(config)
     logger.info("Manuelle Datensammlung ausgelöst")
     return RedirectResponse(url="/manual", status_code=303)
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    from src.settings.manager import SettingsManager
+    mgr = SettingsManager()
+    settings = await mgr.get_all()
+    saved = request.query_params.get("saved") == "1"
+    return templates.TemplateResponse(
+        "settings.html",
+        {"request": request, "title": "Einstellungen", "settings": settings, "saved": saved},
+    )
+
+
+@router.post("/settings")
+async def save_settings(request: Request):
+    from src.settings.manager import SettingsManager, DEFAULTS
+    mgr = SettingsManager()
+    form = await request.form()
+    for key in DEFAULTS:
+        if key in form:
+            await mgr.set(key, str(form[key]))
+    logger.info("Einstellungen gespeichert")
+    return RedirectResponse(url="/settings?saved=1", status_code=303)
