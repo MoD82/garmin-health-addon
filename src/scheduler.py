@@ -54,7 +54,15 @@ def trigger_analysis_now(config: Config) -> None:
 
 
 async def _run_collection(config: Config) -> None:
-    logger.info("Datensammlung gestartet (Phase 2)")
+    """Startet Garmin-Datensammlung über Orchestrator."""
+    from .collector.run_collection import collect_all
+    result = await collect_all(config)
+    if result["status"] == "mfa_pending":
+        logger.warning("MFA-Eingabe via Web-UI erforderlich: /manual")
+    elif result["status"] == "error":
+        logger.error("Datensammlung fehlgeschlagen: %s", result.get("error"))
+    else:
+        logger.info("Datensammlung abgeschlossen: %s", result)
 
 
 async def _run_analysis(config: Config) -> None:

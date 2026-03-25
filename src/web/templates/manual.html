@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Manuell — Garmin Health Coach{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>Datensammlung</h2>
+
+  {% if mfa_pending %}
+  <!-- MFA-Eingabe-Formular -->
+  <div class="alert alert-warning">
+    <strong>MFA-Code erforderlich</strong><br>
+    Garmin Connect fordert eine Zwei-Faktor-Authentifizierung.
+    Bitte den aktuellen Code aus der Authenticator-App eingeben.
+  </div>
+
+  {% if mfa_error %}
+  <div class="alert alert-error">
+    Fehler: {{ mfa_error }}
+  </div>
+  {% endif %}
+
+  <form method="post" action="/garmin/mfa">
+    <div class="form-group">
+      <label for="mfa_code">MFA-Code (6 Stellen)</label>
+      <input
+        type="text"
+        id="mfa_code"
+        name="mfa_code"
+        pattern="[0-9]{6}"
+        maxlength="6"
+        placeholder="123456"
+        required
+        autofocus
+        class="input-code"
+      >
+    </div>
+    <button type="submit" class="btn btn-primary">Code einreichen</button>
+  </form>
+
+  {% else %}
+  <!-- Normaler Modus: Manueller Trigger -->
+  {% if last_collection %}
+  <p class="status-info">
+    Letzte Sammlung: <strong>{{ last_collection.date }}</strong>
+    — Status: <span class="badge badge-{{ last_collection.status }}">{{ last_collection.status }}</span>
+  </p>
+  {% else %}
+  <p class="status-info">Noch keine Datensammlung durchgeführt.</p>
+  {% endif %}
+
+  <form method="post" action="/garmin/collect">
+    <button type="submit" class="btn btn-primary">Jetzt sammeln</button>
+  </form>
+  <p class="hint">Startet sofortige Garmin-Datensammlung außerhalb des Zeitplans.</p>
+  {% endif %}
+</div>
+{% endblock %}
