@@ -111,3 +111,43 @@ async def test_send_report_daily_subject_contains_tagesbericht():
             await send_report(config, _result(), _blocks(), is_weekly=False)
             call_args = mock_send.call_args
             assert "Tagesbericht" in call_args[0][1]
+
+
+def test_render_email_contains_readiness_score():
+    """Template rendert korrekt und enthält Readiness-Score."""
+    from src.output.email_sender import _render_email
+    result = dict(status="success", date="2026-03-25", readiness=72,
+                  gpt_response="Test Coach Text.", new_prs=[])
+    blocks = dict(
+        daily=[{"date": "2026-03-25", "body_battery": 74, "sleep_score": 83,
+                "hrv_status": "balanced", "stress_total": 620,
+                "weight": 78.2, "body_fat": 14.1, "muscle_mass": 67.2}],
+        activities=[],
+        blood_pressure=[{"systolic": 118, "diastolic": 76, "pulse": 64}],
+        events=[],
+        checkin=None,
+        personal_records=[],
+    )
+    html = _render_email(result, blocks, is_weekly=False)
+    assert "72" in html
+    assert "MODERAT" in html
+    assert "Test Coach Text." in html
+
+
+def test_render_email_weekly_shows_section():
+    """Wochenversion enthält 'Wochenrückblick'-Abschnitt."""
+    from src.output.email_sender import _render_email
+    result = dict(status="success", date="2026-03-25", readiness=60,
+                  gpt_response="", new_prs=[])
+    blocks = dict(
+        daily=[],
+        activities=[{"date": "2026-03-24", "name": "Rennrad", "activity_type": "cycling",
+                     "distance_km": 80.0, "elevation_m": 1000, "norm_power": 220,
+                     "tss": 120.0, "duration_min": 160}],
+        blood_pressure=[],
+        events=[],
+        checkin=None,
+        personal_records=[],
+    )
+    html = _render_email(result, blocks, is_weekly=True)
+    assert "Wochenrückblick" in html

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Garmin Coach Report</title>
+</head>
+<body style="margin:0;padding:20px;background:#f0f2f5;font-family:Arial,Helvetica,sans-serif;">
+
+{# ── Hilfsvariablen ─────────────────────────────────────────────────────── #}
+{% set today = blocks.daily[0] if blocks.daily else {} %}
+{% set r = result.readiness | default(0) %}
+{% set ns = namespace(label="ERHOLUNG", color="#e74c3c", emoji="🔴") %}
+{% if r >= 75 %}
+  {% set ns.label = "GUT" %}{% set ns.color = "#27ae60" %}{% set ns.emoji = "🟢" %}
+{% elif r >= 50 %}
+  {% set ns.label = "MODERAT" %}{% set ns.color = "#f39c12" %}{% set ns.emoji = "🟡" %}
+{% endif %}
+{% set label = ns.label %}
+{% set color = ns.color %}
+{% set emoji = ns.emoji %}
+
+{# Blutdruck-Durchschnitt #}
+{% if blocks.blood_pressure %}
+  {% set bp_sys = (blocks.blood_pressure | map(attribute='systolic') | list | sum / blocks.blood_pressure | length) | round(0) | int %}
+  {% set bp_dia = (blocks.blood_pressure | map(attribute='diastolic') | list | sum / blocks.blood_pressure | length) | round(0) | int %}
+  {% set bp_pul = (blocks.blood_pressure | map(attribute='pulse') | list | sum / blocks.blood_pressure | length) | round(0) | int %}
+{% endif %}
+
+{# Wochenrückblick #}
+{% if blocks.activities %}
+  {% set week_km = (blocks.activities | map(attribute='distance_km') | select('ne', none) | list | sum) | round(1) %}
+  {% set week_elev = blocks.activities | map(attribute='elevation_m') | select('ne', none) | list | sum %}
+  {% set week_tss = (blocks.activities | map(attribute='tss') | select('ne', none) | list | sum) | round(0) | int %}
+  {% set active_days = blocks.activities | map(attribute='date') | unique | list | length %}
+{% endif %}
+
+{# Nächstes Rennen #}
+{% set next_race = blocks.events | selectattr('event_type', 'eq', 'race') | first | default(none) %}
+
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;">
+  <tr><td>
+
+  {# ── HEADER ──────────────────────────────────────────────────────────── #}
+  <table width="100%" cellpadding="20" cellspacing="0"
+         style="background:#1a1a2e;border-radius:8px 8px 0 0;">
+    <tr>
+      <td>
+        <p style="margin:0;color:#a0a8d4;font-size:13px;">
+          {{ result.date | default('') }}{% if is_weekly %} · Wochenbericht{% endif %}
+        </p>
+        <h1 style="margin:8px 0 0;color:#fff;font-size:22px;">
+          🚴 Garmin Coach{% if is_weekly %} — Wochenbericht{% else %} — Guten Morgen!{% endif %}
+        </h1>
+      </td>
+    </tr>
+  </table>
+
+  {# ── READINESS SCORE ─────────────────────────────────────────────────── #}
+  <table width="100%" cellpadding="16" cellspacing="0"
+         style="background:#fff;border-left:4px solid {{ color }};">
+    <tr>
+      <td>
+        <p style="margin:0 0 4px;color:#666;font-size:12px;text-transform:uppercase;letter-spacing:1px;">
+          Training Readiness Score
+        </p>
+        <p style="margin:0;font-size:32px;font-weight:bold;color:{{ color }};">
+          {{ emoji }} {{ r }} / 100 — {{ label }}
+        </p>
+        <table width="100%" cellpadding="0" cellspacing="2" style="margin-top:10px;">
+          <tr>
+            {% for i in range(10) %}
+            <td style="background:{% if i < (r // 10) %}{{ color }}{% else %}#e0e0e0{% endif %};height:8px;border-radius:2px;"></td>
+            {% endfor %}
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  {# ── ERHOLUNG + KÖRPERDATEN ───────────────────────────────────────────── #}
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;margin-top:2px;">
+    <tr>
+      <td width="50%" valign="top" style="padding:16px;border-right:1px solid #f0f0f0;">
+        <p style="margin:0 0 10px;font-weight:bold;color:#333;font-size:13px;text-transform:uppercase;">Erholung</p>
+        <table cellpadding="4" cellspacing="0">
+          <tr><td style="color:#666;font-size:13px;">Body Battery</td><td style="font-weight:bold;color:#333;padding-left:8px;">{{ today.body_battery | default('—') }}</td></tr>
+          <tr><td style="color:#666;font-size:13px;">Schlaf</td><td style="font-weight:bold;color:#333;padding-left:8px;">{{ today.sleep_score | default('—') }} Pkt</td></tr>
+          <tr><td style="color:#666;font-size:13px;">HRV</td><td style="font-weight:bold;color:#333;padding-left:8px;">{{ today.hrv_status | default('—') | title }}</td></tr>
+          <tr><td style="color:#666;font-size:13px;">Stress</td><td style="font-weight:bold;color:#333;padding-left:8px;">{{ today.stress_total | default('—') }}</td></tr>
+        </table>
+      </td>
+      <td width="50%" valign="top" style="padding:16px;">
+        <p style="margin:0 0 10px;font-weight:bold;color:#333;font-size:13px;text-transform:uppercase;">Körperdaten</p>
+        <table cellpadding="4" cellspacing="0">
+          <tr><td style="color:#666;font-size:13px;">Gewicht</td><td style="font-weight:bold;color:#333;padding-left:8px;">{% if today.weight %}{{ today.weight }}kg{% else %}—{% endif %}</td></tr>
+          <tr><td style="color:#666;font-size:13px;">Körperfett</td><td style="font-weight:bold;color:#333;padding-left:8px;">{% if today.body_fat %}{{ today.body_fat }}%{% else %}—{% endif %}</td></tr>
+          <tr><td style="color:#666;font-size:13px;">Muskelmasse</td><td style="font-weight:bold;color:#333;padding-left:8px;">{% if today.muscle_mass %}{{ today.muscle_mass }}kg{% else %}—{% endif %}</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  {# ── COACH-ANALYSE (GPT) ─────────────────────────────────────────────── #}
+  {% if result.gpt_response %}
+  <table width="100%" cellpadding="16" cellspacing="0"
+         style="background:#f8f9ff;margin-top:2px;border-left:4px solid #6c63ff;">
+    <tr>
+      <td>
+        <p style="margin:0 0 8px;font-weight:bold;color:#6c63ff;font-size:13px;text-transform:uppercase;">Coach-Analyse</p>
+        <p style="margin:0;color:#333;font-size:14px;line-height:1.6;white-space:pre-line;">{{ result.gpt_response }}</p>
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+
+  {# ── WOCHENRÜCKBLICK (nur bei is_weekly) ──────────────────────────────── #}
+  {% if is_weekly %}
+  <table width="100%" cellpadding="16" cellspacing="0" style="background:#fff;margin-top:2px;">
+    <tr>
+      <td>
+        <p style="margin:0 0 10px;font-weight:bold;color:#333;font-size:13px;text-transform:uppercase;">Wochenrückblick</p>
+        <table width="100%" cellpadding="8" cellspacing="0" style="background:#f0f2f5;border-radius:6px;">
+          <tr>
+            <td style="text-align:center;"><p style="margin:0;font-size:20px;font-weight:bold;color:#333;">{{ week_km | default(0) }}km</p><p style="margin:2px 0 0;color:#666;font-size:12px;">Distanz</p></td>
+            <td style="text-align:center;border-left:1px solid #ddd;"><p style="margin:0;font-size:20px;font-weight:bold;color:#333;">{{ week_elev | default(0) }}hm</p><p style="margin:2px 0 0;color:#666;font-size:12px;">Höhenmeter</p></td>
+            <td style="text-align:center;border-left:1px solid #ddd;"><p style="margin:0;font-size:20px;font-weight:bold;color:#333;">{{ week_tss | default(0) }}</p><p style="margin:2px 0 0;color:#666;font-size:12px;">TSS</p></td>
+            <td style="text-align:center;border-left:1px solid #ddd;"><p style="margin:0;font-size:20px;font-weight:bold;color:#333;">{{ active_days | default(0) }}T</p><p style="margin:2px 0 0;color:#666;font-size:12px;">Aktiv</p></td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+
+  {# ── LETZTE AKTIVITÄTEN ──────────────────────────────────────────────── #}
+  {% if blocks.activities %}
+  <table width="100%" cellpadding="16" cellspacing="0" style="background:#fff;margin-top:2px;">
+    <tr>
+      <td>
+        <p style="margin:0 0 10px;font-weight:bold;color:#333;font-size:13px;text-transform:uppercase;">Letzte Aktivitäten</p>
+        {% for act in blocks.activities[:3] %}
+        <table width="100%" cellpadding="8" cellspacing="0" style="background:#f8f9fa;border-radius:6px;margin-bottom:6px;">
+          <tr>
+            <td>
+              <p style="margin:0;font-weight:bold;color:#333;font-size:13px;">{{ act.date }} · {{ act.name | default(act.activity_type | title) }}</p>
+              <p style="margin:4px 0 0;color:#666;font-size:12px;">
+                {% if act.distance_km %}{{ act.distance_km }}km{% endif %}
+                {% if act.elevation_m %} · {{ act.elevation_m }}hm{% endif %}
+                {% if act.norm_power %} · NP: {{ act.norm_power }}W{% endif %}
+                {% if act.tss %} · TSS: {{ act.tss | round(0) | int }}{% endif %}
+                {% if act.duration_min %} · {{ act.duration_min }}min{% endif %}
+              </p>
+            </td>
+          </tr>
+        </table>
+        {% endfor %}
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+
+  {# ── BLUTDRUCK ────────────────────────────────────────────────────────── #}
+  {% if blocks.blood_pressure %}
+  <table width="100%" cellpadding="16" cellspacing="0" style="background:#fff;margin-top:2px;">
+    <tr>
+      <td>
+        <p style="margin:0 0 6px;font-weight:bold;color:#333;font-size:13px;text-transform:uppercase;">Blutdruck (Ø {{ blocks.blood_pressure | length }} Messungen)</p>
+        <p style="margin:0;font-size:18px;font-weight:bold;color:#333;">
+          {{ bp_sys }}/{{ bp_dia }} mmHg · {{ bp_pul }} bpm
+          {% if bp_sys < 130 and bp_dia < 85 %}<span style="color:#27ae60;">✓ Normal</span>{% elif bp_sys >= 140 or bp_dia >= 90 %}<span style="color:#e74c3c;">⚠ Erhöht</span>{% endif %}
+        </p>
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+
+  {# ── NEUE BESTLEISTUNGEN ─────────────────────────────────────────────── #}
+  {% if result.new_prs %}
+  <table width="100%" cellpadding="16" cellspacing="0" style="background:#fff9e6;margin-top:2px;border-left:4px solid #f39c12;">
+    <tr>
+      <td>
+        <p style="margin:0 0 8px;font-weight:bold;color:#f39c12;font-size:13px;text-transform:uppercase;">🏆 Neue Bestleistungen!</p>
+        {% for pr in result.new_prs %}
+        <p style="margin:0 0 4px;color:#333;font-size:13px;">
+          {{ pr.activity_type | title }} · {{ pr.category }}: <strong>{{ pr.value }}</strong>{% if pr.previous %} (vorher: {{ pr.previous }}){% endif %}
+        </p>
+        {% endfor %}
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+
+  {# ── NÄCHSTES RENNEN ─────────────────────────────────────────────────── #}
+  {% if next_race %}
+  <table width="100%" cellpadding="16" cellspacing="0" style="background:#fff;margin-top:2px;">
+    <tr>
+      <td style="text-align:center;">
+        <p style="margin:0;color:#666;font-size:13px;">Nächstes Rennen</p>
+        <p style="margin:4px 0 0;font-size:16px;font-weight:bold;color:#333;">🏁 {{ next_race.title }} · {{ next_race.date_start }}</p>
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+
+  {# ── FOOTER ──────────────────────────────────────────────────────────── #}
+  <table width="100%" cellpadding="12" cellspacing="0" style="background:#1a1a2e;border-radius:0 0 8px 8px;margin-top:2px;">
+    <tr>
+      <td style="text-align:center;color:#666;font-size:11px;">Garmin Health Coach · Home Assistant Addon</td>
+    </tr>
+  </table>
+
+  </td></tr>
+</table>
+
+</body>
+</html>
