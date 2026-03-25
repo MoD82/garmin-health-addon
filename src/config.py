@@ -11,6 +11,8 @@ class Config(BaseModel):
     email_user: str = ""
     email_password: str = ""
     email_recipient: str = ""
+    email_smtp_host: str = "smtp.gmail.com"
+    email_smtp_port: int = 587
     garmin_user: str = ""
     garmin_password: str = ""
     analysis_time: str = "08:00"
