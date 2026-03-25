@@ -1,4 +1,5 @@
 """Web-Routen — Dashboard, Manual/MFA-Seite, Collection-Trigger."""
+import asyncio
 import logging
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
@@ -23,6 +24,7 @@ async def manual_page(request: Request):
     mfa_pending = getattr(request.app.state, "mfa_pending", False)
     mfa_error = getattr(request.app.state, "mfa_error", None)
     last_collection = getattr(request.app.state, "last_collection", None)
+    last_analysis = getattr(request.app.state, "last_analysis", None)
     return templates.TemplateResponse(
         "manual.html",
         {
@@ -31,6 +33,7 @@ async def manual_page(request: Request):
             "mfa_pending": mfa_pending,
             "mfa_error": mfa_error,
             "last_collection": last_collection,
+            "last_analysis": last_analysis,
         },
     )
 
@@ -73,6 +76,77 @@ async def trigger_collection(request: Request):
     trigger_collection_now(config)
     logger.info("Manuelle Datensammlung ausgelöst")
     return RedirectResponse(url="/manual", status_code=303)
+
+
+@router.post("/analysis/trigger")
+async def trigger_analysis(request: Request):
+    """Startet manuell eine Analyse (SSE-fähig via /analysis/stream)."""
+    if getattr(request.app.state, "analysis_running", False):
+        logger.info("Analyse läuft bereits — zweiten Start ignoriert")
+        return RedirectResponse(url="/manual", status_code=303)
+
+    from src.settings.manager import SettingsManager
+    from src.analysis.run_analysis import run_analysis
+
+    settings = await SettingsManager().get_all()
+    config = request.app.state.config
+
+    queue: asyncio.Queue = asyncio.Queue()
+    request.app.state.analysis_queue = queue
+    request.app.state.analysis_running = True
+    request.app.state.analysis_log = []
+
+    def emit(msg: str) -> None:
+        request.app.state.analysis_log.append(msg)
+        try:
+            queue.put_nowait(msg)
+        except asyncio.QueueFull:
+            pass
+
+    async def run_analysis_task() -> None:
+        try:
+            result = await run_analysis(config, settings, emit)
+            request.app.state.last_analysis = result
+        finally:
+            request.app.state.analysis_running = False
+            queue.put_nowait(None)  # Sentinel: SSE beenden
+
+    asyncio.create_task(run_analysis_task())
+    logger.info("Analyse-Task gestartet")
+    return RedirectResponse(url="/manual", status_code=303)
+
+
+@router.get("/analysis/stream")
+async def analysis_stream(request: Request):
+    """SSE-Endpoint: streamt Analyse-Fortschritt live."""
+
+    async def generate():
+        # Bereits vorhandene Logs senden (falls Analyse schon läuft)
+        for msg in getattr(request.app.state, "analysis_log", []):
+            yield f"data: {msg}\n\n"
+
+        queue = getattr(request.app.state, "analysis_queue", None)
+        if queue is None:
+            yield "data: Keine Analyse aktiv\n\n"
+            return
+
+        # Live-Events streamen bis Sentinel (None)
+        while True:
+            try:
+                msg = await asyncio.wait_for(queue.get(), timeout=30.0)
+            except asyncio.TimeoutError:
+                yield "data: ping\n\n"
+                continue
+            if msg is None:
+                yield "data: [DONE]\n\n"
+                break
+            yield f"data: {msg}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/settings", response_class=HTMLResponse)
