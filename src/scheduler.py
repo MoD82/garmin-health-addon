@@ -66,7 +66,20 @@ async def _run_collection(config: Config) -> None:
 
 
 async def _run_analysis(config: Config) -> None:
-    logger.info("Analyse gestartet (Phase 3)")
+    """Startet Analyse — nur wenn analysis_mode == 'scheduled'."""
+    from .settings.manager import SettingsManager
+    mgr = SettingsManager()
+    mode = await mgr.get("analysis_mode")
+    if mode != "scheduled":
+        logger.info("Analyse übersprungen (Modus: %s)", mode)
+        return
+    settings = await mgr.get_all()
+    from .analysis.run_analysis import run_analysis
+    result = await run_analysis(config, settings)
+    if result["status"] == "error":
+        logger.error("Geplante Analyse fehlgeschlagen: %s", result.get("error"))
+    else:
+        logger.info("Geplante Analyse abgeschlossen: Readiness=%s", result.get("readiness"))
 
 
 async def _run_weekly_report(config: Config) -> None:
