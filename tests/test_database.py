@@ -21,7 +21,7 @@ async def test_init_db_creates_tables():
                   if not row[0].startswith("sqlite_")}
     expected = {
         "activities", "analyses", "blood_pressure",
-        "daily_checkins", "daily_data", "events", "personal_records"
+        "daily_checkins", "daily_data", "events", "personal_records", "settings"
     }
     assert expected == tables
 
