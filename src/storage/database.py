@@ -88,6 +88,10 @@ CREATE TABLE IF NOT EXISTS personal_records (
     date TEXT NOT NULL,
     UNIQUE(activity_type, category)
 );
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 
