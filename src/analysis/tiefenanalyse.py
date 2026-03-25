@@ -7,7 +7,6 @@ async def build_context_blocks(
     days: int = 14,
     include_activities: bool = True,
     include_blood_pressure: bool = True,
-    include_body_composition: bool = True,
 ) -> dict:
     """
     Liest Daten aus SQLite und gibt strukturierte Blöcke für GPT-Kontext zurück.
@@ -16,18 +15,17 @@ async def build_context_blocks(
         days: Anzahl der zurückliegenden Tage (default: 14).
         include_activities: Aktivitätsdaten einbeziehen (default: True).
         include_blood_pressure: Blutdruckdaten einbeziehen (default: True).
-        include_body_composition: Körperkompositionsdaten einbeziehen (default: True, nicht verwendet).
 
     Returns:
         Dict mit Keys: daily, activities, blood_pressure, events, checkin, personal_records.
     """
     today = date.today()
-    since = (today - timedelta(days=days)).isoformat()
+    since = (today - timedelta(days=days - 1)).isoformat()
 
     async for db in get_db():
         # --- Daily Data ---
         cursor = await db.execute(
-            "SELECT * FROM daily_data WHERE date > ? ORDER BY date DESC",
+            "SELECT * FROM daily_data WHERE date >= ? ORDER BY date DESC",
             (since,),
         )
         daily_rows = await cursor.fetchall()

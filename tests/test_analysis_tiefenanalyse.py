@@ -92,5 +92,5 @@ async def test_checkin_is_none_when_empty(populated_db):
 async def test_days_filter_limits_daily_data(populated_db):
     with patch("src.storage.database.DB_PATH", populated_db):
         blocks = await build_context_blocks(days=1)
-    # Only today (yesterday filtered out by 1-day window)
-    assert len(blocks["daily"]) <= 1
+    # Only today's record (yesterday filtered out by 1-day window)
+    assert len(blocks["daily"]) == 1
