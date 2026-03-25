@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     return templates.TemplateResponse(
-        "dashboard.html", {"request": request, "title": "Dashboard"}
+        request,
+        "dashboard.html",
+        {"title": "Dashboard"}
     )
 
 
@@ -26,9 +28,9 @@ async def manual_page(request: Request):
     last_collection = getattr(request.app.state, "last_collection", None)
     last_analysis = getattr(request.app.state, "last_analysis", None)
     return templates.TemplateResponse(
+        request,
         "manual.html",
         {
-            "request": request,
             "title": "Manuell",
             "mfa_pending": mfa_pending,
             "mfa_error": mfa_error,
@@ -110,6 +112,7 @@ async def trigger_analysis(request: Request):
         finally:
             request.app.state.analysis_running = False
             queue.put_nowait(None)  # Sentinel: SSE beenden
+            request.app.state.analysis_queue = None  # Queue nach Abschluss leeren
 
     asyncio.create_task(run_analysis_task())
     logger.info("Analyse-Task gestartet")
@@ -156,8 +159,9 @@ async def settings_page(request: Request):
     settings = await mgr.get_all()
     saved = request.query_params.get("saved") == "1"
     return templates.TemplateResponse(
+        request,
         "settings.html",
-        {"request": request, "title": "Einstellungen", "settings": settings, "saved": saved},
+        {"title": "Einstellungen", "settings": settings, "saved": saved},
     )
 
 
