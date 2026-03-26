@@ -21,3 +21,15 @@ def test_dashboard_has_fitness_widgets(client):
 def test_dashboard_has_form_widget(client):
     resp = client.get("/")
     assert "Form" in resp.text or "TSB" in resp.text
+
+
+def test_dashboard_has_trends_link(client):
+    """Link zu /trends ist vorhanden."""
+    resp = client.get("/")
+    assert "/trends" in resp.text
+
+
+def test_dashboard_has_recovery_score(client):
+    """Recovery Score aus Empfehlungskarte ist vorhanden."""
+    resp = client.get("/")
+    assert "Erholung" in resp.text or "recovery" in resp.text.lower() or "/100" in resp.text

@@ -67,11 +67,12 @@
 
   <div class="metric-card">
     <div class="metric-label">Form (TSB)</div>
-    <div class="metric-value" style="color:{% if today_pmc.tsb >= 0 %}#2ecc71{% else %}#e74c3c{% endif %}">
-      {% if today_pmc.tsb >= 0 %}+{% endif %}{{ today_pmc.tsb | round(1) }}
+    <div class="metric-value" style="color:{% if today_pmc.tsb is not none and today_pmc.tsb >= 0 %}#2ecc71{% else %}#e74c3c{% endif %}">
+      {% if today_pmc.tsb is not none and today_pmc.tsb >= 0 %}+{% endif %}{{ today_pmc.tsb | round(1) if today_pmc.tsb is not none else 0 }}
     </div>
     <div class="metric-sub">
-      {% if today_pmc.tsb > 5 %}Frisch &amp; bereit
+      {% if today_pmc.tsb is none %}—
+      {% elif today_pmc.tsb > 5 %}Frisch &amp; bereit
       {% elif today_pmc.tsb >= -5 %}Ausgeglichen
       {% else %}Im Aufbau{% endif %}
     </div>
@@ -84,7 +85,7 @@
     <div class="big">{{ last_activity.name or last_activity.activity_type }}</div>
     <div class="detail">
       {% if last_activity.distance_km %}{{ last_activity.distance_km | round(1) }} km{% endif %}
-      {% if last_activity.duration_min %} · {{ last_activity.duration_min }} min{% endif %}
+      {% if last_activity.duration_min %} · {{ last_activity.duration_min | round(0) | int }} min{% endif %}
       {% if last_activity.avg_hr %} · ⌀ {{ last_activity.avg_hr }} bpm{% endif %}
     </div>
     <div class="detail" style="margin-top:0.25rem">{{ last_activity.date }}</div>
