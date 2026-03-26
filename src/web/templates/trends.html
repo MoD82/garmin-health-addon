@@ -30,16 +30,16 @@
     <div class="pmc-stats">
       <div class="pmc-stat">
         <span>Fitness (CTL)</span>
-        <strong style="color:#3498db">{{ today_pmc.ctl }}</strong>
+        <strong style="color:#3498db">{{ today_pmc.ctl | round(1) }}</strong>
       </div>
       <div class="pmc-stat">
         <span>Müdigkeit (ATL)</span>
-        <strong style="color:#e74c3c">{{ today_pmc.atl }}</strong>
+        <strong style="color:#e74c3c">{{ today_pmc.atl | round(1) }}</strong>
       </div>
       <div class="pmc-stat">
         <span>Form (TSB)</span>
         <strong style="color:{% if today_pmc.tsb >= 0 %}#2ecc71{% else %}#e74c3c{% endif %}">
-          {% if today_pmc.tsb >= 0 %}+{% endif %}{{ today_pmc.tsb }}
+          {% if today_pmc.tsb >= 0 %}+{% endif %}{{ today_pmc.tsb | round(1) }}
         </strong>
       </div>
     </div>

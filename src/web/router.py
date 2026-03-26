@@ -283,6 +283,9 @@ async def trends_view(request: Request, days: int = 90):
 
     display_start = date.today() - timedelta(days=days)
     warmup_start = display_start - timedelta(days=42)
+    # Wochenvolumen — mindestens 84 Tage (12 Wochen) laden, unabhängig von ?days
+    volume_start = date.today() - timedelta(days=84)
+    volume_cutoff = min(display_start, volume_start)
     today_str = date.today().isoformat()
 
     # TSS für PMC (mit training_load Fallback)
@@ -306,7 +309,7 @@ async def trends_view(request: Request, days: int = 90):
         cursor = await db.execute(
             """SELECT date, distance_km FROM activities
                WHERE date >= ? AND activity_type = 'cycling'""",
-            (display_start.isoformat(),),
+            (volume_cutoff.isoformat(),),
         )
         activity_rows = await cursor.fetchall()
 
