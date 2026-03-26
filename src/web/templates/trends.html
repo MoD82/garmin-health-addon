@@ -38,8 +38,8 @@
       </div>
       <div class="pmc-stat">
         <span>Form (TSB)</span>
-        <strong style="color:{% if today_pmc.tsb >= 0 %}#2ecc71{% else %}#e74c3c{% endif %}">
-          {% if today_pmc.tsb >= 0 %}+{% endif %}{{ today_pmc.tsb | round(1) }}
+        <strong style="color:{% if today_pmc.tsb is not none and today_pmc.tsb >= 0 %}#2ecc71{% else %}#e74c3c{% endif %}">
+          {% if today_pmc.tsb is not none and today_pmc.tsb >= 0 %}+{% endif %}{{ today_pmc.tsb | round(1) if today_pmc.tsb is not none else 0 }}
         </strong>
       </div>
     </div>

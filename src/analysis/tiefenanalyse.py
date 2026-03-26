@@ -85,6 +85,7 @@ async def build_context_blocks(
     _warmup_start = _display_start - timedelta(days=42)
 
     # TSS pro Tag mit training_load als Fallback
+    _tss_rows: list = []
     async for db in get_db():
         cursor = await db.execute(
             """SELECT date, COALESCE(SUM(COALESCE(tss, training_load, 0)), 0) as daily_tss
