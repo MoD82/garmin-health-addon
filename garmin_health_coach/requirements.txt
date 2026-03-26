@@ -8,4 +8,3 @@ garminconnect==0.2.22
 requests==2.32.3
 pydantic==2.8.2
 aiosqlite==0.20.0
-pytest-asyncio==0.23.8
