@@ -1,5 +1,8 @@
 from datetime import date, timedelta
 
+CTL_DAYS = 42  # Chronic Training Load — 42-Tage EMA
+ATL_DAYS = 7   # Acute Training Load  —  7-Tage EMA
+
 
 def calculate_pmc(
     daily_tss: dict[str, float],
@@ -13,8 +16,8 @@ def calculate_pmc(
     start_date / end_date: inklusiver Bereich
 
     Morning Values: TSB[t] = CTL[t-1] - ATL[t-1]
-    CTL = 42-Tage exponentieller Durchschnitt
-    ATL = 7-Tage exponentieller Durchschnitt
+    CTL = {CTL_DAYS}-Tage exponentieller Durchschnitt
+    ATL = {ATL_DAYS}-Tage exponentieller Durchschnitt
     """
     result = []
     ctl = 0.0
@@ -29,8 +32,8 @@ def calculate_pmc(
         tsb = ctl - atl
 
         # EMA-Update
-        ctl = ctl + (tss - ctl) / 42
-        atl = atl + (tss - atl) / 7
+        ctl = ctl + (tss - ctl) / CTL_DAYS
+        atl = atl + (tss - atl) / ATL_DAYS
 
         result.append({
             "date": date_str,

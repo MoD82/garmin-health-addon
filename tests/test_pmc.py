@@ -22,8 +22,8 @@ def test_single_tss_day():
     assert day2["tsb"] < 0  # Nach hohem TSS ist Form negativ
 
 
-def test_ctl_atl_ema_constants():
-    """CTL = 42-Tage EMA, ATL = 7-Tage EMA."""
+def test_atl_rises_faster_than_ctl():
+    """ATL steigt schneller als CTL bei gleichmäßigem Training."""
     daily = {f"2024-01-{i:02d}": 100.0 for i in range(1, 29)}
     result = calculate_pmc(daily, date(2024, 1, 1), date(2024, 1, 28))
     last = result[-1]
@@ -49,3 +49,9 @@ def test_warmup_affects_starting_values():
     result_with_warmup = calculate_pmc(all_tss, date(2024, 1, 1), date(2024, 1, 8))
     result_without = calculate_pmc({"2024-01-08": 0.0}, date(2024, 1, 8), date(2024, 1, 8))
     assert result_with_warmup[-1]["ctl"] > result_without[-1]["ctl"]
+
+
+def test_inverted_date_range_returns_empty():
+    """start_date > end_date gibt leere Liste zurück."""
+    result = calculate_pmc({}, date(2024, 1, 5), date(2024, 1, 1))
+    assert result == []
