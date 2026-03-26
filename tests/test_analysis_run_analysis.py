@@ -116,3 +116,54 @@ async def test_run_analysis_error_saved_to_db(analysis_db):
         result = await run_analysis(config, {})
 
     assert result["status"] == "error"
+
+
+@pytest.fixture
+async def tmp_db(tmp_path):
+    db_path = tmp_path / "test.db"
+    with patch("src.storage.database.DB_PATH", db_path):
+        await init_db()
+        yield db_path
+
+
+@pytest.mark.asyncio
+async def test_run_analysis_calls_email_when_enabled(tmp_db):
+    """send_report wird aufgerufen wenn output_email=true."""
+    from unittest.mock import AsyncMock, patch
+    from src.config import Config
+    from src.analysis.run_analysis import run_analysis
+
+    config = Config(openai_api_key="")  # kein GPT
+    settings = {"output_email": "true", "gpt_context_days": "14",
+                 "gpt_include_activities": "true", "gpt_include_blood_pressure": "true",
+                 "gpt_max_tokens": "1000", "gpt_temperature": "0.4"}
+
+    # Lazy import → Patch auf das Original-Modul (nicht auf run_analysis namespace)
+    with patch("src.storage.database.DB_PATH", tmp_db), \
+         patch("src.output.email_sender.send_report", new_callable=AsyncMock) as mock_send:
+        mock_send.return_value = True
+        result = await run_analysis(config, settings)
+
+    mock_send.assert_called_once()
+    call_args = mock_send.call_args[0]
+    assert call_args[0] is config  # erster Positional-Arg = config
+
+
+@pytest.mark.asyncio
+async def test_run_analysis_skips_email_when_disabled(tmp_db):
+    """send_report wird NICHT aufgerufen wenn output_email=false."""
+    from unittest.mock import AsyncMock, patch
+    from src.config import Config
+    from src.analysis.run_analysis import run_analysis
+
+    config = Config(openai_api_key="")
+    settings = {"output_email": "false", "gpt_context_days": "14",
+                 "gpt_include_activities": "true", "gpt_include_blood_pressure": "true",
+                 "gpt_max_tokens": "1000", "gpt_temperature": "0.4"}
+
+    # Lazy import → Patch auf das Original-Modul
+    with patch("src.storage.database.DB_PATH", tmp_db), \
+         patch("src.output.email_sender.send_report", new_callable=AsyncMock) as mock_send:
+        await run_analysis(config, settings)
+
+    mock_send.assert_not_called()

@@ -114,12 +114,27 @@ async def run_analysis(
             await db.commit()
         _emit("Analyse gespeichert")
 
+        # 7. E-Mail-Versand
+        email_sent = False
+        if settings.get("output_email") == "true":
+            _emit("Versende E-Mail-Report...")
+            from ..output.email_sender import send_report
+            email_sent = await send_report(config, {
+                "status": "success",
+                "date": today,
+                "readiness": readiness,
+                "gpt_response": gpt_response,
+                "new_prs": new_prs,
+            }, blocks)
+            _emit("E-Mail versendet ✓" if email_sent else "E-Mail-Versand übersprungen")
+
         result = {
             "status": "success",
             "date": today,
             "readiness": readiness,
             "gpt_response": gpt_response,
             "new_prs": new_prs,
+            "email_sent": email_sent,
         }
         _emit("Analyse abgeschlossen!")
         return result
