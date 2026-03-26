@@ -64,6 +64,7 @@ def get_recommendation(
             "recovery_score": rec,
         }
 
+    # TSB-Grenzen: tsb<-5 = Stufe 3, tsb∈[-5,5] = Stufe 4 (beide Grenzen inklusiv für Stufe 4)
     if tsb < -5:
         return {
             "emoji": "🚴",

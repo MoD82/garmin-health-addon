@@ -79,3 +79,51 @@ def test_result_has_required_fields():
     assert "reason" in r
     assert "color" in r
     assert "recovery_score" in r
+
+
+# --- Boundary Value Tests ---
+
+def test_boundary_rec_34_ist_pause():
+    """rec=34 → Pause (< 35)"""
+    r = get_recommendation(tsb=5.0, readiness=34, body_battery=None, hrv_status=None)
+    assert "Pause" in r["title"]
+
+def test_boundary_rec_35_ist_nicht_pause():
+    """rec=35 → nicht Pause (>= 35)"""
+    r = get_recommendation(tsb=5.0, readiness=35, body_battery=None, hrv_status=None)
+    assert "Pause" not in r["title"]
+
+def test_boundary_tsb_minus21_ist_regeneration():
+    """tsb=-21 → Aktive Regeneration (< -20)"""
+    r = get_recommendation(tsb=-21.0, readiness=70, body_battery=None, hrv_status=None)
+    assert "Regeneration" in r["title"]
+
+def test_boundary_tsb_minus20_ist_nicht_regeneration_wegen_tsb():
+    """tsb=-20 und rec>=50 → Grundlage (tsb=-20 ist NICHT < -20)"""
+    r = get_recommendation(tsb=-20.0, readiness=70, body_battery=None, hrv_status=None)
+    assert r["color"] == "#f39c12"  # Grundlage Z2
+
+def test_boundary_tsb_minus5_ist_kraft_z2():
+    """tsb=-5 → Kraft oder Z2 (NOT < -5, also Stufe 4)"""
+    r = get_recommendation(tsb=-5.0, readiness=65, body_battery=None, hrv_status=None)
+    assert r["color"] == "#27ae60"  # Kraft oder Z2
+
+def test_boundary_tsb_5_ist_kraft_z2():
+    """tsb=5 → Kraft oder Z2 (<= 5)"""
+    r = get_recommendation(tsb=5.0, readiness=65, body_battery=None, hrv_status=None)
+    assert r["color"] == "#27ae60"
+
+def test_boundary_tsb_6_verlässt_kraft_z2():
+    """tsb=6 → nicht mehr Kraft oder Z2 (> 5)"""
+    r = get_recommendation(tsb=6.0, readiness=65, body_battery=None, hrv_status=None)
+    assert r["color"] != "#27ae60"
+
+def test_boundary_tsb_20_ist_schwelle():
+    """tsb=20, rec>=70 → Schwellentraining (<= 20)"""
+    r = get_recommendation(tsb=20.0, readiness=75, body_battery=None, hrv_status=None)
+    assert "Schwelle" in r["title"]
+
+def test_boundary_tsb_21_ist_vo2max():
+    """tsb=21, rec<85 → VO2max (> 20)"""
+    r = get_recommendation(tsb=21.0, readiness=80, body_battery=None, hrv_status=None)
+    assert "VO2max" in r["title"]
