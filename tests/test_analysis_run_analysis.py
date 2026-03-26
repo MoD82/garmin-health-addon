@@ -167,3 +167,41 @@ async def test_run_analysis_skips_email_when_disabled(tmp_db):
         await run_analysis(config, settings)
 
     mock_send.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_analysis_calls_ha_sensors_by_default(tmp_db):
+    """update_ha_sensors wird aufgerufen wenn output_ha_sensor nicht 'false'."""
+    from unittest.mock import patch
+    from src.config import Config
+    from src.analysis.run_analysis import run_analysis
+
+    config = Config(openai_api_key="")
+    settings = {"output_ha_sensor": "true", "gpt_context_days": "14",
+                "gpt_include_activities": "true", "gpt_include_blood_pressure": "true",
+                "gpt_max_tokens": "1000", "gpt_temperature": "0.4"}
+
+    with patch("src.storage.database.DB_PATH", tmp_db), \
+         patch("src.output.ha_states.update_ha_sensors") as mock_ha:
+        await run_analysis(config, settings)
+
+    mock_ha.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_run_analysis_calls_push_when_enabled(tmp_db):
+    """send_alerts wird aufgerufen wenn output_push=true."""
+    from unittest.mock import patch
+    from src.config import Config
+    from src.analysis.run_analysis import run_analysis
+
+    config = Config(openai_api_key="")
+    settings = {"output_push": "true", "gpt_context_days": "14",
+                "gpt_include_activities": "true", "gpt_include_blood_pressure": "true",
+                "gpt_max_tokens": "1000", "gpt_temperature": "0.4"}
+
+    with patch("src.storage.database.DB_PATH", tmp_db), \
+         patch("src.output.notifier.send_alerts", return_value=[]) as mock_alerts:
+        await run_analysis(config, settings)
+
+    mock_alerts.assert_called_once()

@@ -114,28 +114,39 @@ async def run_analysis(
             await db.commit()
         _emit("Analyse gespeichert")
 
-        # 7. E-Mail-Versand
-        email_sent = False
-        if settings.get("output_email") == "true":
-            _emit("Versende E-Mail-Report...")
-            from ..output.email_sender import send_report
-            email_sent = await send_report(config, {
-                "status": "success",
-                "date": today,
-                "readiness": readiness,
-                "gpt_response": gpt_response,
-                "new_prs": new_prs,
-            }, blocks)
-            _emit("E-Mail versendet ✓" if email_sent else "E-Mail-Versand übersprungen")
-
-        result = {
+        # Gemeinsames result-Dict für alle Output-Kanäle
+        _result_for_output = {
             "status": "success",
             "date": today,
             "readiness": readiness,
             "gpt_response": gpt_response,
             "new_prs": new_prs,
-            "email_sent": email_sent,
         }
+
+        # 7. E-Mail-Versand
+        email_sent = False
+        if settings.get("output_email") == "true":
+            _emit("Versende E-Mail-Report...")
+            from ..output.email_sender import send_report
+            email_sent = await send_report(config, _result_for_output, blocks)
+            _emit("E-Mail versendet ✓" if email_sent else "E-Mail-Versand übersprungen")
+
+        # 8. HA-Sensor-Entities
+        if settings.get("output_ha_sensor", "true") != "false":
+            _emit("Aktualisiere HA-Sensoren...")
+            from ..output.ha_states import update_ha_sensors
+            update_ha_sensors(_result_for_output, blocks)
+            _emit("HA-Sensoren aktualisiert")
+
+        # 9. Push-Notifications
+        if settings.get("output_push") == "true":
+            _emit("Prüfe Alerts...")
+            from ..output.notifier import send_alerts
+            alerts = send_alerts(_result_for_output, blocks, settings)
+            if alerts:
+                _emit(f"{len(alerts)} Alert(s) gesendet")
+
+        result = {**_result_for_output, "email_sent": email_sent}
         _emit("Analyse abgeschlossen!")
         return result
 
