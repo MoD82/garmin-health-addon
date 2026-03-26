@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .trends-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .trends-full { grid-column: 1 / -1; }
+  .chart-card { background: #16213e; border-radius: 8px; padding: 1rem; }
+  .chart-card h3 { margin: 0 0 0.75rem 0; font-size: 0.9rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em; }
+  .time-selector { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+  .time-selector a { padding: 0.4rem 1rem; border-radius: 20px; background: #16213e; color: #aaa; text-decoration: none; font-size: 0.85rem; border: 1px solid #333; }
+  .time-selector a.active, .time-selector a:hover { background: #3498db; color: #fff; border-color: #3498db; }
+  .pmc-stats { display: flex; gap: 2rem; margin-top: 0.75rem; font-size: 0.85rem; }
+  .pmc-stat { display: flex; flex-direction: column; }
+  .pmc-stat span:first-child { color: #888; font-size: 0.75rem; }
+  .pmc-stat strong { font-size: 1.2rem; }
+  svg { width: 100%; height: auto; display: block; }
+</style>
+
+<div class="time-selector">
+  <a href="/trends?days=30" {% if days == 30 %}class="active"{% endif %}>30 Tage</a>
+  <a href="/trends?days=90" {% if days == 90 %}class="active"{% endif %}>3 Monate</a>
+  <a href="/trends?days=180" {% if days == 180 %}class="active"{% endif %}>6 Monate</a>
+  <a href="/trends?days=365" {% if days == 365 %}class="active"{% endif %}>1 Jahr</a>
+</div>
+
+<div class="trends-grid">
+
+  <div class="chart-card trends-full">
+    <h3>Performance Management Chart</h3>
+    {{ svg_pmc | safe }}
+    <div class="pmc-stats">
+      <div class="pmc-stat">
+        <span>Fitness (CTL)</span>
+        <strong style="color:#3498db">{{ today_pmc.ctl }}</strong>
+      </div>
+      <div class="pmc-stat">
+        <span>Müdigkeit (ATL)</span>
+        <strong style="color:#e74c3c">{{ today_pmc.atl }}</strong>
+      </div>
+      <div class="pmc-stat">
+        <span>Form (TSB)</span>
+        <strong style="color:{% if today_pmc.tsb >= 0 %}#2ecc71{% else %}#e74c3c{% endif %}">
+          {% if today_pmc.tsb >= 0 %}+{% endif %}{{ today_pmc.tsb }}
+        </strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-card trends-full">
+    <h3>Wochenvolumen Radfahren — letzte 12 Wochen</h3>
+    {{ svg_volume | safe }}
+  </div>
+
+  <div class="chart-card">
+    <h3>Readiness Score</h3>
+    {{ svg_readiness | safe }}
+  </div>
+
+  <div class="chart-card">
+    <h3>Schlafqualität</h3>
+    {{ svg_sleep | safe }}
+  </div>
+
+  <div class="chart-card">
+    <h3>Body Battery</h3>
+    {{ svg_battery | safe }}
+  </div>
+
+  <div class="chart-card">
+    <h3>Stress</h3>
+    {{ svg_stress | safe }}
+  </div>
+
+</div>
+{% endblock %}

@@ -175,3 +175,285 @@ async def save_settings(request: Request):
             await mgr.set(key, str(form[key]))
     logger.info("Einstellungen gespeichert")
     return RedirectResponse(url="/settings?saved=1", status_code=303)
+
+
+# ── EVENTS ────────────────────────────────────────────────────────────────
+
+@router.get("/events", response_class=HTMLResponse)
+async def events_list(request: Request):
+    from src.storage.events_repo import EventsRepo
+    events = await EventsRepo().list_all()
+    return templates.TemplateResponse(
+        request, "events.html",
+        {"title": "Events", "events": events, "mode": "list"},
+    )
+
+
+@router.get("/events/new", response_class=HTMLResponse)
+async def events_new_form(request: Request):
+    return templates.TemplateResponse(
+        request, "events.html",
+        {"title": "Events", "events": [], "mode": "new", "event": {}},
+    )
+
+
+@router.post("/events/new")
+async def events_create(
+    request: Request,
+    event_type: str = Form(...),
+    date_start: str = Form(...),
+    title: str = Form(...),
+    date_end: str = Form(""),
+    priority: str = Form(""),
+    distance_km: str = Form(""),
+    elevation_m: str = Form(""),
+    goal: str = Form(""),
+    training_possible: str = Form("1"),
+):
+    from src.storage.events_repo import EventsRepo
+    await EventsRepo().create({
+        "event_type": event_type,
+        "date_start": date_start,
+        "date_end": date_end or None,
+        "title": title,
+        "priority": priority or None,
+        "distance_km": float(distance_km) if distance_km else None,
+        "elevation_m": int(elevation_m) if elevation_m else None,
+        "goal": goal or None,
+        "training_possible": training_possible == "1",
+    })
+    return RedirectResponse(url="/events", status_code=303)
+
+
+@router.get("/events/{event_id}/edit", response_class=HTMLResponse)
+async def events_edit_form(request: Request, event_id: int):
+    from src.storage.events_repo import EventsRepo
+    event = await EventsRepo().get(event_id)
+    if not event:
+        return RedirectResponse(url="/events", status_code=303)
+    return templates.TemplateResponse(
+        request, "events.html",
+        {"title": "Events", "events": [], "mode": "edit", "event": event},
+    )
+
+
+@router.post("/events/{event_id}/edit")
+async def events_update(
+    request: Request,
+    event_id: int,
+    event_type: str = Form(...),
+    date_start: str = Form(...),
+    title: str = Form(...),
+    date_end: str = Form(""),
+    priority: str = Form(""),
+    distance_km: str = Form(""),
+    elevation_m: str = Form(""),
+    goal: str = Form(""),
+    training_possible: str = Form("1"),
+):
+    from src.storage.events_repo import EventsRepo
+    await EventsRepo().update(event_id, {
+        "event_type": event_type,
+        "date_start": date_start,
+        "date_end": date_end or None,
+        "title": title,
+        "priority": priority or None,
+        "distance_km": float(distance_km) if distance_km else None,
+        "elevation_m": int(elevation_m) if elevation_m else None,
+        "goal": goal or None,
+        "training_possible": training_possible == "1",
+    })
+    return RedirectResponse(url="/events", status_code=303)
+
+
+@router.post("/events/{event_id}/delete")
+async def events_delete(request: Request, event_id: int):
+    from src.storage.events_repo import EventsRepo
+    await EventsRepo().delete(event_id)
+    return RedirectResponse(url="/events", status_code=303)
+
+
+@router.get("/trends", response_class=HTMLResponse)
+async def trends_view(request: Request, days: int = 90):
+    from datetime import date, timedelta
+    from ..storage.database import get_db
+    from ..analysis.pmc import calculate_pmc
+    from ..analysis.recommendation import get_recommendation
+    from ..analysis.svg_charts import line_chart, bar_chart, pmc_chart
+
+    display_start = date.today() - timedelta(days=days)
+    warmup_start = display_start - timedelta(days=42)
+    today_str = date.today().isoformat()
+
+    # TSS für PMC (mit training_load Fallback)
+    async for db in get_db():
+        cursor = await db.execute(
+            """SELECT date, COALESCE(SUM(COALESCE(tss, training_load, 0)), 0)
+               FROM activities WHERE date >= ? GROUP BY date""",
+            (warmup_start.isoformat(),),
+        )
+        tss_rows = await cursor.fetchall()
+
+        # Gesundheitsdaten (nur vorhandene Spalten!)
+        cursor = await db.execute(
+            """SELECT date, readiness_score, sleep_score, body_battery, hrv_status, stress_total
+               FROM daily_data WHERE date >= ? ORDER BY date""",
+            (display_start.isoformat(),),
+        )
+        health_rows = await cursor.fetchall()
+
+        # Wochenvolumen (distance_km bereits in km)
+        cursor = await db.execute(
+            """SELECT date, distance_km FROM activities
+               WHERE date >= ? AND activity_type = 'cycling'""",
+            (display_start.isoformat(),),
+        )
+        activity_rows = await cursor.fetchall()
+
+    # PMC berechnen
+    daily_tss = {r[0]: float(r[1]) for r in tss_rows}
+    full_pmc = calculate_pmc(daily_tss, warmup_start, date.today())
+    pmc_series = [p for p in full_pmc if p["date"] >= display_start.isoformat()]
+    today_pmc = pmc_series[-1] if pmc_series else {"ctl": 0.0, "atl": 0.0, "tsb": 0.0}
+
+    # Heutige Empfehlung
+    today_health_row = next(
+        (dict(zip(["date", "readiness_score", "sleep_score", "body_battery", "hrv_status", "stress_total"], r))
+         for r in health_rows if r[0] == today_str),
+        {},
+    )
+    recommendation = get_recommendation(
+        tsb=today_pmc["tsb"],
+        readiness=today_health_row.get("readiness_score"),
+        body_battery=today_health_row.get("body_battery"),
+        hrv_status=today_health_row.get("hrv_status"),
+    )
+
+    # Chart-Daten aufbereiten
+    health_labels = [r[0][5:] for r in health_rows]  # MM-DD
+    readiness_values = [r[1] for r in health_rows]    # readiness_score
+    sleep_values = [r[2] for r in health_rows]        # sleep_score
+    battery_values = [r[3] for r in health_rows]      # body_battery
+    stress_values = [r[5] for r in health_rows]       # stress_total
+
+    svg_pmc = pmc_chart(pmc_series)
+    svg_readiness = line_chart(health_labels,
+        [{"label": "Readiness", "values": readiness_values, "color": "#2ecc71"}],
+        title="Readiness Score")
+    svg_sleep = line_chart(health_labels,
+        [{"label": "Schlaf", "values": sleep_values, "color": "#3498db"}],
+        title="Schlafqualität")
+    svg_battery = line_chart(health_labels,
+        [{"label": "Body Battery", "values": battery_values, "color": "#f39c12"}],
+        title="Body Battery")
+    svg_stress = line_chart(health_labels,
+        [{"label": "Stress", "values": stress_values, "color": "#e74c3c"}],
+        title="Stress")
+
+    # Wochenvolumen (letzte 12 Wochen, distance_km direkt verwenden)
+    week_km: dict[str, float] = {}
+    for row in activity_rows:
+        d = date.fromisoformat(row[0])
+        iso_year, iso_week, _ = d.isocalendar()
+        week_key = f"{iso_year}-W{iso_week:02d}"
+        week_km[week_key] = week_km.get(week_key, 0.0) + (row[1] or 0.0)
+
+    today = date.today()
+    week_labels = []
+    week_values = []
+    for w in range(11, -1, -1):
+        ref = today - timedelta(weeks=w)
+        iso_year, iso_week, _ = ref.isocalendar()
+        key = f"{iso_year}-W{iso_week:02d}"
+        week_labels.append(f"KW{iso_week}")
+        week_values.append(week_km.get(key, 0.0))
+
+    svg_volume = bar_chart(week_labels, week_values, color="#3498db", title="Wochenvolumen (km)")
+
+    return templates.TemplateResponse(request, "trends.html", {
+        "title": "Trends",
+        "days": days,
+        "svg_pmc": svg_pmc,
+        "svg_readiness": svg_readiness,
+        "svg_sleep": svg_sleep,
+        "svg_battery": svg_battery,
+        "svg_stress": svg_stress,
+        "svg_volume": svg_volume,
+        "today_pmc": today_pmc,
+        "recommendation": recommendation,
+    })
+
+
+# ── KALENDER ──────────────────────────────────────────────────────────────
+
+@router.get("/calendar", response_class=HTMLResponse)
+async def calendar_view(request: Request, year: int = 0, month: int = 0):
+    import calendar as cal_mod
+    from datetime import date
+    today = date.today()
+    if not year:
+        year = today.year
+    if not month:
+        month = today.month
+
+    # Kalender-Matrix (6 Wochen × 7 Tage, 0 = leere Zelle)
+    cal = cal_mod.monthcalendar(year, month)
+    month_name = cal_mod.month_name[month]
+
+    # Prev / Next Monat
+    if month == 1:
+        prev_year, prev_month = year - 1, 12
+    else:
+        prev_year, prev_month = year, month - 1
+    if month == 12:
+        next_year, next_month = year + 1, 1
+    else:
+        next_year, next_month = year, month + 1
+
+    # Aktivitäten des Monats laden
+    prefix = f"{year}-{month:02d}"
+    activities_by_day: dict[int, list] = {}
+    readiness_by_day: dict[int, int] = {}
+
+    from src.storage.database import get_db as _get_db
+    async for db in _get_db():
+        cursor = await db.execute(
+            "SELECT date, activity_type, distance_km FROM activities WHERE date LIKE ?",
+            (f"{prefix}%",),
+        )
+        for row in await cursor.fetchall():
+            d = int(row[0].split("-")[2])
+            activities_by_day.setdefault(d, []).append({"activity_type": row[1], "distance_km": row[2]})
+
+        cursor = await db.execute(
+            "SELECT date, readiness_score FROM daily_data WHERE date LIKE ? AND readiness_score IS NOT NULL",
+            (f"{prefix}%",),
+        )
+        for row in await cursor.fetchall():
+            d = int(row[0].split("-")[2])
+            readiness_by_day[d] = row[1]
+
+    # Events des Monats laden
+    from src.storage.events_repo import EventsRepo
+    events_list = await EventsRepo().list_for_month(year, month)
+    events_by_day: dict[int, list] = {}
+    for ev in events_list:
+        d = int(ev["date_start"].split("-")[2])
+        events_by_day.setdefault(d, []).append(ev)
+
+    return templates.TemplateResponse(
+        request, "calendar.html",
+        {
+            "title": "Kalender",
+            "cal": cal,
+            "month_name": month_name,
+            "year": year,
+            "month": month,
+            "today": today,
+            "prev_year": prev_year, "prev_month": prev_month,
+            "next_year": next_year, "next_month": next_month,
+            "activities_by_day": activities_by_day,
+            "readiness_by_day": readiness_by_day,
+            "events_by_day": events_by_day,
+        },
+    )
