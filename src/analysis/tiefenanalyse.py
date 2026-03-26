@@ -77,11 +77,10 @@ async def build_context_blocks(
         }
 
     # PMC-Block berechnen (lazy imports innerhalb der Funktion — etabliertes Muster)
-    from datetime import date as _date
     from .pmc import calculate_pmc
     from .recommendation import get_recommendation
 
-    _today = _date.today()
+    _today = date.today()
     _display_start = _today - timedelta(days=days)
     _warmup_start = _display_start - timedelta(days=42)
 
@@ -125,10 +124,10 @@ async def build_context_blocks(
         _ctl_last = _recent[-1]["ctl"]
         _ctl_rising = _recent[-1]["ctl"] > _recent[0]["ctl"]
         _tsb_rising = _recent[-1]["tsb"] > _recent[0]["tsb"]
-        if _ctl_diff_per_week > 1:
-            _trend = "aufbauend"
-        elif _atl_last > _ctl_last + 15:
+        if _atl_last > _ctl_last + 15:
             _trend = "überlastet"
+        elif _ctl_diff_per_week > 1:
+            _trend = "aufbauend"
         elif not _ctl_rising and _tsb_rising:
             _trend = "tapering"
         else:
