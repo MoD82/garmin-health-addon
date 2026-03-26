@@ -83,4 +83,42 @@ async def _run_analysis(config: Config) -> None:
 
 
 async def _run_weekly_report(config: Config) -> None:
-    logger.info("Wochenbericht gestartet (Phase 4)")
+    """Versendet Wochenbericht-Email (separater CronJob, läuft an weekly_report_day)."""
+    from .settings.manager import SettingsManager
+    mgr = SettingsManager()
+
+    if await mgr.get("weekly_report_enabled") != "true":
+        logger.info("Wochenbericht deaktiviert — überspringe")
+        return
+    if await mgr.get("output_email") != "true":
+        logger.info("E-Mail deaktiviert — überspringe Wochenbericht")
+        return
+
+    from datetime import date
+    from .storage.database import get_db
+    from .analysis.tiefenanalyse import build_context_blocks
+    from .output.email_sender import send_report
+
+    # Aktuelle Analyse aus SQLite laden (bereits durch _run_analysis befüllt)
+    today = date.today().isoformat()
+    result: dict = {"status": "success", "date": today, "readiness": 0,
+                    "gpt_response": "", "new_prs": []}
+    async for db in get_db():
+        cursor = await db.execute(
+            "SELECT readiness_score, gpt_response FROM analyses "
+            "WHERE date = ? AND status = 'success'",
+            (today,),
+        )
+        row = await cursor.fetchone()
+        if row:
+            result["readiness"] = row[0] or 0
+            result["gpt_response"] = row[1] or ""
+
+    days = await mgr.get_int("gpt_context_days")
+    blocks = await build_context_blocks(days=days)
+
+    sent = await send_report(config, result, blocks, is_weekly=True)
+    if sent:
+        logger.info("Wochenbericht versendet")
+    else:
+        logger.warning("Wochenbericht-Versand fehlgeschlagen")
