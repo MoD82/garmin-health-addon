@@ -1,15 +1,141 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card">
-    <h2>🏋️ Training Readiness</h2>
-    <div class="placeholder">Addon läuft ✓ — Daten folgen ab Phase 3.</div>
+<style>
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+  }
+  .card-full { grid-column: 1 / -1; }
+
+  .rec-card {
+    background: {{ recommendation.color }}22;
+    border: 2px solid {{ recommendation.color }};
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+  .rec-emoji { font-size: 3rem; line-height: 1; flex-shrink: 0; }
+  .rec-content h2 { margin: 0 0 0.5rem 0; font-size: 1.4rem; color: {{ recommendation.color }}; }
+  .rec-content p { margin: 0; color: #ccc; line-height: 1.5; font-size: 0.95rem; }
+  .rec-score { margin-top: 0.75rem; font-size: 0.8rem; color: #888; }
+
+  .metric-card {
+    background: #16213e;
+    border-radius: 8px;
+    padding: 1.25rem;
+    text-align: center;
+  }
+  .metric-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+  .metric-value { font-size: 2rem; font-weight: bold; }
+  .metric-sub { font-size: 0.8rem; color: #666; margin-top: 0.25rem; }
+
+  .info-card { background: #16213e; border-radius: 8px; padding: 1.25rem; }
+  .info-card h3 { margin: 0 0 0.75rem 0; font-size: 0.85rem; color: #888; text-transform: uppercase; }
+  .info-card .big { font-size: 1.1rem; font-weight: bold; color: #eee; }
+  .info-card .detail { font-size: 0.85rem; color: #888; margin-top: 0.25rem; }
+</style>
+
+<div class="dashboard-grid">
+
+  <!-- Empfehlungskarte (volle Breite) -->
+  <div class="card-full">
+    <div class="rec-card">
+      <div class="rec-emoji">{{ recommendation.emoji }}</div>
+      <div class="rec-content">
+        <h2>{{ recommendation.title }}</h2>
+        <p>{{ recommendation.reason }}</p>
+        <div class="rec-score">Erholung: {{ recommendation.recovery_score }}/100</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PMC-Metriken -->
+  <div class="metric-card">
+    <div class="metric-label">Fitness (CTL)</div>
+    <div class="metric-value" style="color:#3498db">{{ today_pmc.ctl | round(1) }}</div>
+    <div class="metric-sub">42-Tage Aufbau</div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-label">Müdigkeit (ATL)</div>
+    <div class="metric-value" style="color:#e74c3c">{{ today_pmc.atl | round(1) }}</div>
+    <div class="metric-sub">7-Tage Belastung</div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-label">Form (TSB)</div>
+    <div class="metric-value" style="color:{% if today_pmc.tsb >= 0 %}#2ecc71{% else %}#e74c3c{% endif %}">
+      {% if today_pmc.tsb >= 0 %}+{% endif %}{{ today_pmc.tsb | round(1) }}
+    </div>
+    <div class="metric-sub">
+      {% if today_pmc.tsb > 5 %}Frisch &amp; bereit
+      {% elif today_pmc.tsb >= -5 %}Ausgeglichen
+      {% else %}Im Aufbau{% endif %}
+    </div>
+  </div>
+
+  <!-- Letzte Aktivität -->
+  <div class="info-card">
+    <h3>🚴 Letzte Aktivität</h3>
+    {% if last_activity %}
+    <div class="big">{{ last_activity.name or last_activity.activity_type }}</div>
+    <div class="detail">
+      {% if last_activity.distance_km %}{{ last_activity.distance_km | round(1) }} km{% endif %}
+      {% if last_activity.duration_min %} · {{ last_activity.duration_min }} min{% endif %}
+      {% if last_activity.avg_hr %} · ⌀ {{ last_activity.avg_hr }} bpm{% endif %}
+    </div>
+    <div class="detail" style="margin-top:0.25rem">{{ last_activity.date }}</div>
+    {% else %}
+    <div class="detail">Noch keine Aktivitäten vorhanden</div>
+    {% endif %}
+  </div>
+
+  <!-- Nächstes Rennen -->
+  <div class="info-card">
+    <h3>🏁 Nächstes Rennen</h3>
+    {% if next_race %}
+    <div class="big">{{ next_race.title }}</div>
+    <div class="detail">{{ next_race.date }}</div>
+    <div class="detail" style="margin-top:0.25rem">
+      {% if next_race.days == 0 %}Heute!
+      {% elif next_race.days == 1 %}Morgen!
+      {% else %}in {{ next_race.days }} Tagen{% endif %}
+    </div>
+    {% else %}
+    <div class="detail">Kein Rennen geplant</div>
+    <div class="detail" style="margin-top:0.5rem">
+      <a href="/events/new" style="color:#3498db">+ Rennen eintragen</a>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Heutige Gesundheit -->
+  <div class="info-card">
+    <h3>💤 Gesundheit heute</h3>
+    {% if health %}
+    {% if health.sleep_score is not none %}
+    <div class="detail">Schlaf: <strong>{{ health.sleep_score }}/100</strong></div>
+    {% endif %}
+    {% if health.body_battery is not none %}
+    <div class="detail">Body Battery: <strong>{{ health.body_battery }}</strong></div>
+    {% endif %}
+    {% if health.readiness_score is not none %}
+    <div class="detail">Readiness: <strong>{{ health.readiness_score }}/100</strong></div>
+    {% endif %}
+    {% if health.hrv_status %}
+    <div class="detail">HRV: <strong>{{ health.hrv_status }}</strong></div>
+    {% endif %}
+    {% else %}
+    <div class="detail">Noch keine Daten für heute</div>
+    {% endif %}
+  </div>
+
 </div>
-<div class="card">
-    <h2>📋 Heutige Empfehlung</h2>
-    <div class="placeholder">Folgt in Phase 3</div>
-</div>
-<div class="card">
-    <h2>📊 Letzte Aktivität</h2>
-    <div class="placeholder">Folgt in Phase 2</div>
+
+<div style="margin-top:1.5rem; text-align:center;">
+  <a href="/trends" style="color:#3498db; font-size:0.9rem;">→ Alle Trends ansehen</a>
 </div>
 {% endblock %}

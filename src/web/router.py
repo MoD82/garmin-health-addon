@@ -13,11 +13,92 @@ logger = logging.getLogger(__name__)
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    return templates.TemplateResponse(
-        request,
-        "dashboard.html",
-        {"title": "Dashboard"}
+    from datetime import date, timedelta
+    from ..storage.database import get_db
+    from ..analysis.pmc import calculate_pmc
+    from ..analysis.recommendation import get_recommendation
+
+    today_str = date.today().isoformat()
+    warmup_start = date.today() - timedelta(days=42 + 90)
+
+    async for db in get_db():
+        # TSS für PMC (90 Tage Anzeige + 42 Warmup)
+        cursor = await db.execute(
+            """SELECT date, COALESCE(SUM(COALESCE(tss, training_load, 0)), 0)
+               FROM activities WHERE date >= ? GROUP BY date""",
+            (warmup_start.isoformat(),),
+        )
+        tss_rows = await cursor.fetchall()
+
+        # Heutige Gesundheit (nur vorhandene Spalten!)
+        cursor = await db.execute(
+            """SELECT readiness_score, sleep_score, body_battery, hrv_status, stress_total, vo2max
+               FROM daily_data WHERE date = ?""",
+            (today_str,),
+        )
+        health_row = await cursor.fetchone()
+
+        # Letzte Aktivität (neueste zuerst über id — kein start_time!)
+        cursor = await db.execute(
+            """SELECT name, activity_type, distance_km, duration_min, avg_hr, date
+               FROM activities ORDER BY date DESC, id DESC LIMIT 1"""
+        )
+        last_act = await cursor.fetchone()
+
+        # Nächstes Rennen
+        cursor = await db.execute(
+            """SELECT title, date_start FROM events
+               WHERE event_type = 'race' AND date_start >= ?
+               ORDER BY date_start ASC LIMIT 1""",
+            (today_str,),
+        )
+        next_race = await cursor.fetchone()
+
+    # PMC
+    daily_tss = {r[0]: float(r[1]) for r in tss_rows}
+    full_pmc = calculate_pmc(daily_tss, warmup_start, date.today())
+    today_pmc = full_pmc[-1] if full_pmc else {"ctl": 0.0, "atl": 0.0, "tsb": 0.0}
+
+    # Empfehlung
+    health = {}
+    if health_row:
+        health = dict(zip(
+            ["readiness_score", "sleep_score", "body_battery", "hrv_status", "stress_total", "vo2max"],
+            health_row,
+        ))
+    recommendation = get_recommendation(
+        tsb=today_pmc["tsb"],
+        readiness=health.get("readiness_score"),
+        body_battery=health.get("body_battery"),
+        hrv_status=health.get("hrv_status"),
     )
+
+    # Tage bis nächstes Rennen
+    next_race_ctx = None
+    if next_race:
+        race_date = date.fromisoformat(next_race[1])
+        days_to_race = (race_date - date.today()).days
+        next_race_ctx = {
+            "title": next_race[0],
+            "date": next_race[1],
+            "days": days_to_race,
+        }
+
+    last_activity = None
+    if last_act:
+        last_activity = dict(zip(
+            ["name", "activity_type", "distance_km", "duration_min", "avg_hr", "date"],
+            last_act,
+        ))
+
+    return templates.TemplateResponse(request, "dashboard.html", {
+        "title": "Dashboard",
+        "recommendation": recommendation,
+        "today_pmc": today_pmc,
+        "health": health,
+        "last_activity": last_activity,
+        "next_race": next_race_ctx,
+    })
 
 
 @router.get("/manual", response_class=HTMLResponse)
