@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+    <a href="/calendar?year={{ prev_year }}&month={{ prev_month }}"
+       style="color:var(--accent);text-decoration:none;font-size:1.2rem;">‹</a>
+    <h2 style="color:var(--text);font-size:1.1rem;">{{ month_name }} {{ year }}</h2>
+    <a href="/calendar?year={{ next_year }}&month={{ next_month }}"
+       style="color:var(--accent);text-decoration:none;font-size:1.2rem;">›</a>
+  </div>
+
+  {# Wochentage-Header #}
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;">
+    {% for wd in ["Mo","Di","Mi","Do","Fr","Sa","So"] %}
+    <div style="text-align:center;font-size:.75rem;color:#666;padding:.3rem;">{{ wd }}</div>
+    {% endfor %}
+  </div>
+
+  {# Kalender-Wochen #}
+  {% for week in cal %}
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:2px;">
+    {% for day in week %}
+    <div style="min-height:80px;background:{% if day == 0 %}transparent{% elif day == today.day and year == today.year and month == today.month %}#1a3a5c{% else %}#16213e{% endif %};border-radius:6px;padding:.4rem;">
+      {% if day > 0 %}
+
+      {# Tag-Nummer + Readiness-Punkt #}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem;">
+        <span style="font-size:.8rem;color:{% if day == today.day and year == today.year and month == today.month %}var(--accent){% else %}#aaa{% endif %};font-weight:{% if day == today.day and year == today.year and month == today.month %}700{% else %}400{% endif %};">{{ day }}</span>
+        {% if day in readiness_by_day %}
+          {% set rs = readiness_by_day[day] %}
+          <span style="width:8px;height:8px;border-radius:50%;display:inline-block;background:{% if rs >= 75 %}#4caf50{% elif rs >= 50 %}#ff9800{% else %}#f44336{% endif %};"></span>
+        {% endif %}
+      </div>
+
+      {# Events #}
+      {% if day in events_by_day %}
+        {% for ev in events_by_day[day] %}
+        <div style="font-size:.7rem;padding:.15rem .3rem;border-radius:3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:{% if ev.event_type == 'race' %}#e9456033{% elif ev.event_type == 'vacation' %}#4caf5033{% else %}#33333388{% endif %};color:{% if ev.event_type == 'race' %}#e94560{% elif ev.event_type == 'vacation' %}#4caf50{% else %}#aaa{% endif %};">
+          {% if ev.event_type == 'race' %}🏁{% elif ev.event_type == 'vacation' %}🌴{% else %}📝{% endif %} {{ ev.title }}
+        </div>
+        {% endfor %}
+      {% endif %}
+
+      {# Aktivitäten #}
+      {% if day in activities_by_day %}
+        {% for act in activities_by_day[day] %}
+        <div style="font-size:.7rem;color:#4caf50;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          🚴 {% if act.distance_km %}{{ act.distance_km | round(0) | int }}km{% else %}{{ act.activity_type }}{% endif %}
+        </div>
+        {% endfor %}
+      {% endif %}
+
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+
+  {# Legende #}
+  <div style="margin-top:1rem;display:flex;gap:1rem;font-size:.75rem;color:#666;">
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;margin-right:3px;"></span>Gut (≥75)</span>
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff9800;margin-right:3px;"></span>Moderat</span>
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f44336;margin-right:3px;"></span>Erholung</span>
+    <span>🏁 Rennen &nbsp; 🌴 Urlaub &nbsp; 🚴 Training</span>
+  </div>
+</div>
+
+{% endblock %}
