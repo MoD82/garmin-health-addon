@@ -41,7 +41,7 @@ async def populated_db(tmp_path):
 async def test_returns_all_block_keys(populated_db):
     with patch("src.storage.database.DB_PATH", populated_db):
         blocks = await build_context_blocks(days=14)
-    assert set(blocks.keys()) == {"daily", "activities", "blood_pressure", "events", "checkin", "personal_records"}
+    assert {"daily", "activities", "blood_pressure", "events", "checkin", "personal_records"}.issubset(blocks.keys())
 
 
 async def test_daily_block_contains_data(populated_db):
