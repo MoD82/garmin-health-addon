@@ -1,0 +1,258 @@
+"""Tests für Garmin-Verbindungsstatus-Endpoints."""
+import pytest
+import aiosqlite
+from pathlib import Path
+from unittest.mock import patch
+from fastapi.testclient import TestClient
+from src.config import Config
+
+
+@pytest.fixture
+def client_no_config(tmp_path):
+    """TestClient ohne Garmin-Credentials."""
+    db_path = tmp_path / "test.db"
+    token_path = tmp_path / "garmin_token.json"
+    cfg = Config(garmin_user="", garmin_password="")
+
+    with patch("src.storage.database.DB_PATH", db_path), \
+         patch("src.collector.garmin_client.DEFAULT_TOKEN_PATH", token_path), \
+         patch("src.scheduler.start_scheduler"), \
+         patch("src.scheduler.stop_scheduler"), \
+         patch("src.main.load_config", return_value=cfg):
+
+        from src.main import app
+
+        with TestClient(app) as c:
+            yield c
+
+
+@pytest.fixture
+def client_with_config(tmp_path):
+    """TestClient mit Garmin-Credentials, kein Token."""
+    db_path = tmp_path / "test.db"
+    token_path = tmp_path / "garmin_token.json"
+    cfg = Config(garmin_user="user@test.de", garmin_password="secret")
+
+    with patch("src.storage.database.DB_PATH", db_path), \
+         patch("src.collector.garmin_client.DEFAULT_TOKEN_PATH", token_path), \
+         patch("src.scheduler.start_scheduler"), \
+         patch("src.scheduler.stop_scheduler"), \
+         patch("src.main.load_config", return_value=cfg):
+
+        from src.main import app
+
+        with TestClient(app) as c:
+            yield c
+
+
+@pytest.fixture
+def client_with_token(tmp_path):
+    """TestClient mit Credentials und vorhandenem Token."""
+    db_path = tmp_path / "test.db"
+    token_path = tmp_path / "garmin_token.json"
+    token_path.write_text('{"access_token": "test"}')  # Token existiert
+    cfg = Config(garmin_user="user@test.de", garmin_password="secret")
+
+    with patch("src.storage.database.DB_PATH", db_path), \
+         patch("src.collector.garmin_client.DEFAULT_TOKEN_PATH", token_path), \
+         patch("src.scheduler.start_scheduler"), \
+         patch("src.scheduler.stop_scheduler"), \
+         patch("src.main.load_config", return_value=cfg):
+
+        from src.main import app
+
+        with TestClient(app) as c:
+            c._token_path = token_path
+            c._db_path = db_path
+            yield c
+
+
+# ── Status-Endpoint Tests ──────────────────────────────────────────────────
+
+def test_status_no_credentials(client_no_config):
+    """Keine Credentials → state='no_credentials'."""
+    resp = client_no_config.get("/garmin/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["state"] == "no_credentials"
+
+
+def test_status_disconnected_no_token(client_with_config):
+    """Credentials gesetzt, kein Token → state='disconnected'."""
+    resp = client_with_config.get("/garmin/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["state"] == "disconnected"
+
+
+def test_status_token_only(client_with_token):
+    """Token vorhanden, kein Sync → state='token_only'."""
+    resp = client_with_token.get("/garmin/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["state"] == "token_only"
+
+
+def test_status_connected_after_success(tmp_path):
+    """Token + letzter Sync erfolgreich → state='connected'."""
+    import asyncio
+    db_path = tmp_path / "test.db"
+    token_path = tmp_path / "garmin_token.json"
+    token_path.write_text('{"access_token": "test"}')
+    cfg = Config(garmin_user="user@test.de", garmin_password="secret")
+
+    # Erfolgreichem Sync-Eintrag in DB anlegen
+    async def insert():
+        async with aiosqlite.connect(db_path) as db:
+            await db.execute(
+                "CREATE TABLE IF NOT EXISTS analyses "
+                "(date TEXT PRIMARY KEY, readiness_score INTEGER, gpt_response TEXT, "
+                "weekly_plan TEXT, email_sent INTEGER DEFAULT 0, status TEXT DEFAULT 'pending', "
+                "error_message TEXT, created_at TEXT DEFAULT (datetime('now')))"
+            )
+            await db.execute(
+                "INSERT INTO analyses (date, status) VALUES (?, ?)",
+                ("2026-03-27", "success"),
+            )
+            await db.commit()
+
+    asyncio.run(insert())
+
+    with patch("src.storage.database.DB_PATH", db_path), \
+         patch("src.collector.garmin_client.DEFAULT_TOKEN_PATH", token_path), \
+         patch("src.scheduler.start_scheduler"), \
+         patch("src.scheduler.stop_scheduler"), \
+         patch("src.main.load_config", return_value=cfg):
+
+        from src.main import app
+
+        with TestClient(app) as c:
+            resp = c.get("/garmin/status")
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "connected"
+
+
+def test_status_rate_limited(tmp_path):
+    """Letzter Sync mit 429 → state='rate_limited'."""
+    import asyncio
+    db_path = tmp_path / "test.db"
+    token_path = tmp_path / "garmin_token.json"
+    token_path.write_text('{"access_token": "test"}')
+    cfg = Config(garmin_user="user@test.de", garmin_password="secret")
+
+    async def insert():
+        async with aiosqlite.connect(db_path) as db:
+            await db.execute(
+                "CREATE TABLE IF NOT EXISTS analyses "
+                "(date TEXT PRIMARY KEY, readiness_score INTEGER, gpt_response TEXT, "
+                "weekly_plan TEXT, email_sent INTEGER DEFAULT 0, status TEXT DEFAULT 'pending', "
+                "error_message TEXT, created_at TEXT DEFAULT (datetime('now')))"
+            )
+            await db.execute(
+                "INSERT INTO analyses (date, status, error_message) VALUES (?, ?, ?)",
+                ("2026-03-27", "error", "429 Too Many Requests"),
+            )
+            await db.commit()
+
+    asyncio.run(insert())
+
+    with patch("src.storage.database.DB_PATH", db_path), \
+         patch("src.collector.garmin_client.DEFAULT_TOKEN_PATH", token_path), \
+         patch("src.scheduler.start_scheduler"), \
+         patch("src.scheduler.stop_scheduler"), \
+         patch("src.main.load_config", return_value=cfg):
+
+        from src.main import app
+
+        with TestClient(app) as c:
+            resp = c.get("/garmin/status")
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "rate_limited"
+
+
+def test_status_rate_limited_ohne_token(tmp_path):
+    """429-Fehler ohne Token → state='rate_limited' (Priorität vor disconnected)."""
+    import asyncio
+    db_path = tmp_path / "test.db"
+    token_path = tmp_path / "garmin_token.json"
+    # Kein Token erstellt
+    cfg = Config(garmin_user="user@test.de", garmin_password="secret")
+
+    async def insert():
+        async with aiosqlite.connect(db_path) as db:
+            await db.execute(
+                "CREATE TABLE IF NOT EXISTS analyses "
+                "(date TEXT PRIMARY KEY, readiness_score INTEGER, gpt_response TEXT, "
+                "weekly_plan TEXT, email_sent INTEGER DEFAULT 0, status TEXT DEFAULT 'pending', "
+                "error_message TEXT, created_at TEXT DEFAULT (datetime('now')))"
+            )
+            await db.execute(
+                "INSERT INTO analyses (date, status, error_message) VALUES (?, ?, ?)",
+                ("2026-03-27", "error", "429 Too Many Requests"),
+            )
+            await db.commit()
+
+    asyncio.run(insert())
+
+    with patch("src.storage.database.DB_PATH", db_path), \
+         patch("src.collector.garmin_client.DEFAULT_TOKEN_PATH", token_path), \
+         patch("src.scheduler.start_scheduler"), \
+         patch("src.scheduler.stop_scheduler"), \
+         patch("src.main.load_config", return_value=cfg):
+
+        from src.main import app
+
+        with TestClient(app) as c:
+            resp = c.get("/garmin/status")
+
+    assert resp.json()["state"] == "rate_limited"
+
+
+def test_status_token_only_bei_fehler_sync(tmp_path):
+    """Token + letzter Sync mit Fehler (nicht 429) → state='token_only'."""
+    import asyncio
+    db_path = tmp_path / "test.db"
+    token_path = tmp_path / "garmin_token.json"
+    token_path.write_text('{"access_token": "test"}')
+    cfg = Config(garmin_user="user@test.de", garmin_password="secret")
+
+    async def insert():
+        async with aiosqlite.connect(db_path) as db:
+            await db.execute(
+                "CREATE TABLE IF NOT EXISTS analyses "
+                "(date TEXT PRIMARY KEY, readiness_score INTEGER, gpt_response TEXT, "
+                "weekly_plan TEXT, email_sent INTEGER DEFAULT 0, status TEXT DEFAULT 'pending', "
+                "error_message TEXT, created_at TEXT DEFAULT (datetime('now')))"
+            )
+            await db.execute(
+                "INSERT INTO analyses (date, status, error_message) VALUES (?, ?, ?)",
+                ("2026-03-27", "error", "Garmin Login Fehler: Verbindung unterbrochen"),
+            )
+            await db.commit()
+
+    asyncio.run(insert())
+
+    with patch("src.storage.database.DB_PATH", db_path), \
+         patch("src.collector.garmin_client.DEFAULT_TOKEN_PATH", token_path), \
+         patch("src.scheduler.start_scheduler"), \
+         patch("src.scheduler.stop_scheduler"), \
+         patch("src.main.load_config", return_value=cfg):
+
+        from src.main import app
+
+        with TestClient(app) as c:
+            resp = c.get("/garmin/status")
+
+    assert resp.json()["state"] == "token_only"
+
+
+def test_status_json_hat_alle_felder(client_no_config):
+    """Response hat die Felder state, label, detail, color."""
+    resp = client_no_config.get("/garmin/status")
+    data = resp.json()
+    assert "state" in data
+    assert "label" in data
+    assert "detail" in data
+    assert "color" in data

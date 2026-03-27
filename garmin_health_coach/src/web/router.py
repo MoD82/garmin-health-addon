@@ -264,6 +264,75 @@ async def save_settings(request: Request):
     return _redirect(request, "/settings?saved=1")
 
 
+# ── GARMIN STATUS ──────────────────────────────────────────────────────────
+
+@router.get("/garmin/status")
+async def garmin_status(request: Request):
+    """Gibt aktuellen Garmin-Verbindungsstatus als JSON zurück."""
+    from src.collector.garmin_client import DEFAULT_TOKEN_PATH
+    from src.storage.database import get_db
+
+    config = request.app.state.config
+
+    # 1. Keine Credentials
+    if not config.garmin_user or not config.garmin_password:
+        return {
+            "state": "no_credentials",
+            "label": "Keine Zugangsdaten",
+            "detail": "Garmin-Credentials nicht konfiguriert",
+            "color": "gray",
+        }
+
+    token_exists = DEFAULT_TOKEN_PATH.exists()
+
+    # Letzten Analyses-Eintrag lesen
+    last_status = None
+    last_error = None
+    last_date = None
+    async for db in get_db():
+        cursor = await db.execute(
+            "SELECT date, status, error_message FROM analyses ORDER BY date DESC LIMIT 1"
+        )
+        row = await cursor.fetchone()
+        if row:
+            last_date, last_status, last_error = row[0], row[1], row[2]
+
+    # 2. Rate-limited (letzter Sync mit 429)
+    if last_status == "error" and last_error and "429" in last_error:
+        return {
+            "state": "rate_limited",
+            "label": "Rate-limited",
+            "detail": "Garmin blockiert — bitte 2 Stunden warten",
+            "color": "red",
+        }
+
+    # 3. Connected (Token + letzter Sync erfolgreich)
+    if token_exists and last_status == "success":
+        return {
+            "state": "connected",
+            "label": "Verbunden",
+            "detail": f"Letzter Sync: {last_date}" if last_date else "Token vorhanden",
+            "color": "green",
+        }
+
+    # 4. Token vorhanden, aber noch kein/fehlerhafter Sync
+    if token_exists:
+        return {
+            "state": "token_only",
+            "label": "Token vorhanden",
+            "detail": "Noch kein erfolgreicher Sync",
+            "color": "yellow",
+        }
+
+    # 5. Kein Token, Credentials vorhanden
+    return {
+        "state": "disconnected",
+        "label": "Nicht verbunden",
+        "detail": "Kein Token — Verbindung testen",
+        "color": "orange",
+    }
+
+
 # ── EVENTS ────────────────────────────────────────────────────────────────
 
 @router.get("/events", response_class=HTMLResponse)
