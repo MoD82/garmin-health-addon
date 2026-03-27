@@ -6,9 +6,12 @@
         ⏳ Verbindung wird geprüft...
     </div>
     <button id="connect-btn" type="button"
-        style="background:var(--accent);color:white;border:none;padding:.6rem 1.5rem;border-radius:8px;font-size:.95rem;cursor:pointer;">
+        style="display:none;background:var(--accent);color:white;border:none;padding:.6rem 1.5rem;border-radius:8px;font-size:.95rem;cursor:pointer;">
         🔌 Verbindung testen
     </button>
+    <a id="mfa-link" href="manual" style="display:none;background:var(--accent);color:white;text-decoration:none;padding:.6rem 1.5rem;border-radius:8px;font-size:.95rem;">
+        🔐 MFA-Code eingeben →
+    </a>
     <div id="connect-log" style="margin-top:.75rem;font-size:.9rem;color:#bbb;white-space:pre-line;"></div>
 </div>
 
@@ -16,6 +19,7 @@
 (function() {
     const statusEl = document.getElementById('garmin-status');
     const connectBtn = document.getElementById('connect-btn');
+    const mfaLink = document.getElementById('mfa-link');
     const connectLog = document.getElementById('connect-log');
 
     const COLOR_MAP = {
@@ -26,15 +30,21 @@
         gray:   {bg: '#2a2a2a', color: '#9e9e9e'},
     };
 
+    function applyStatus(data) {
+        const c = COLOR_MAP[data.color] || COLOR_MAP.gray;
+        statusEl.style.background = c.bg;
+        statusEl.style.color = c.color;
+        statusEl.textContent = data.label + (data.detail ? ' — ' + data.detail : '');
+        // Button nur zeigen wenn Credentials vorhanden und kein MFA ausstehend
+        const showBtn = data.state !== 'no_credentials' && data.state !== 'mfa_pending';
+        connectBtn.style.display = showBtn ? 'inline-block' : 'none';
+        mfaLink.style.display = data.state === 'mfa_pending' ? 'inline-block' : 'none';
+    }
+
     // Status beim Laden abrufen
     fetch('garmin/status')
         .then(r => r.json())
-        .then(data => {
-            const c = COLOR_MAP[data.color] || COLOR_MAP.gray;
-            statusEl.style.background = c.bg;
-            statusEl.style.color = c.color;
-            statusEl.textContent = data.label + (data.detail ? ' — ' + data.detail : '');
-        })
+        .then(applyStatus)
         .catch(() => {
             statusEl.textContent = '⚠️ Status konnte nicht geladen werden';
         });
@@ -53,12 +63,7 @@
                 // Status nach Test aktualisieren
                 fetch('garmin/status')
                     .then(r => r.json())
-                    .then(data => {
-                        const c = COLOR_MAP[data.color] || COLOR_MAP.gray;
-                        statusEl.style.background = c.bg;
-                        statusEl.style.color = c.color;
-                        statusEl.textContent = data.label + (data.detail ? ' — ' + data.detail : '');
-                    })
+                    .then(applyStatus)
                     .catch(() => {
                         statusEl.textContent = '⚠️ Status konnte nicht aktualisiert werden';
                     });

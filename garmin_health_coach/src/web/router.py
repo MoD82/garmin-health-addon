@@ -283,6 +283,15 @@ async def garmin_status(request: Request):
             "color": "gray",
         }
 
+    # 2. MFA ausstehend
+    if getattr(request.app.state, "mfa_pending", False):
+        return {
+            "state": "mfa_pending",
+            "label": "MFA erforderlich",
+            "detail": "Code auf der Manuell-Seite eingeben",
+            "color": "yellow",
+        }
+
     token_exists = DEFAULT_TOKEN_PATH.exists()
 
     # Letzten Analyses-Eintrag lesen
@@ -297,7 +306,7 @@ async def garmin_status(request: Request):
         if row:
             last_date, last_status, last_error = row[0], row[1], row[2]
 
-    # 2. Rate-limited (letzter Sync mit 429)
+    # 3. Rate-limited (letzter Sync mit 429)
     if last_status == "error" and last_error and "429" in last_error:
         return {
             "state": "rate_limited",
@@ -306,7 +315,7 @@ async def garmin_status(request: Request):
             "color": "red",
         }
 
-    # 3. Connected (Token + letzter Sync erfolgreich)
+    # 4. Connected (Token + letzter Sync erfolgreich)
     if token_exists and last_status == "success":
         return {
             "state": "connected",
@@ -315,7 +324,7 @@ async def garmin_status(request: Request):
             "color": "green",
         }
 
-    # 4. Token vorhanden, aber noch kein/fehlerhafter Sync
+    # 5. Token vorhanden, aber noch kein/fehlerhafter Sync
     if token_exists:
         return {
             "state": "token_only",
@@ -324,7 +333,7 @@ async def garmin_status(request: Request):
             "color": "yellow",
         }
 
-    # 5. Kein Token, Credentials vorhanden
+    # 6. Kein Token, Credentials vorhanden
     return {
         "state": "disconnected",
         "label": "Nicht verbunden",
@@ -364,6 +373,10 @@ async def garmin_connect_stream(request: Request):
 
         if result["success"]:
             yield "data: ✅ Erfolgreich verbunden — Token gespeichert\n\n"
+        elif result.get("error_type") == "mfa_required":
+            request.app.state.garmin_client = client
+            request.app.state.mfa_pending = True
+            yield "data: 🔐 MFA erforderlich — bitte auf der Manuell-Seite den Code eingeben\n\n"
         else:
             yield f"data: ❌ {result['message']}\n\n"
 
