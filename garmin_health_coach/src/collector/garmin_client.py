@@ -146,3 +146,54 @@ class GarminClient:
         if not self._logged_in or self._client is None:
             raise RuntimeError("Nicht eingeloggt — ensure_logged_in() zuerst aufrufen")
         return self._client
+
+    def test_connection(self) -> dict:
+        """Ruft ensure_logged_in() auf und gibt strukturiertes Ergebnis zurück.
+
+        Fängt MFAPendingError separat (bevor RuntimeError-Wrap greift).
+        String-Mapping von str(exc) auf error_type erfolgt hier.
+
+        Returns:
+            dict mit Feldern:
+              - success: bool
+              - error_type: "rate_limited"|"invalid_credentials"|"mfa_required"|"network"|"unknown"|None
+              - message: str (für Anzeige im UI)
+        """
+        try:
+            self.ensure_logged_in()
+            return {
+                "success": True,
+                "error_type": None,
+                "message": "✅ Erfolgreich verbunden — Token gespeichert",
+            }
+        except MFAPendingError:
+            return {
+                "success": False,
+                "error_type": "mfa_required",
+                "message": "MFA erforderlich — nutze die MFA-Eingabe auf der Manuell-Seite",
+            }
+        except RuntimeError as exc:
+            msg = str(exc)
+            if "429" in msg:
+                return {
+                    "success": False,
+                    "error_type": "rate_limited",
+                    "message": "Garmin blockiert zu viele Anfragen — bitte 2 Stunden warten",
+                }
+            if "401" in msg or "credentials" in msg or "password" in msg:
+                return {
+                    "success": False,
+                    "error_type": "invalid_credentials",
+                    "message": "Falscher Benutzername oder Passwort",
+                }
+            if "ConnectionError" in msg or "Network" in msg or "timeout" in msg or "Timeout" in msg:
+                return {
+                    "success": False,
+                    "error_type": "network",
+                    "message": "Keine Verbindung zu Garmin — Internet prüfen",
+                }
+            return {
+                "success": False,
+                "error_type": "unknown",
+                "message": f"Verbindungsfehler: {msg}",
+            }
