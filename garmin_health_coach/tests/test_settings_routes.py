@@ -59,4 +59,4 @@ def test_settings_post_saves_value(client):
 def test_settings_nav_tab_present(client):
     response = client.get("/")
     assert "Einstellungen" in response.text
-    assert "/settings" in response.text
+    assert 'href="settings"' in response.text

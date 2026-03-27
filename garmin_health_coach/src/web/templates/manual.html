@@ -7,7 +7,7 @@
     {% if mfa_error %}
     <div style="color:var(--red);margin-bottom:.75rem;">❌ {{ mfa_error }}</div>
     {% endif %}
-    <form method="POST" action="/garmin/mfa" style="display:flex;gap:.75rem;align-items:flex-end;">
+    <form method="POST" action="garmin/mfa" style="display:flex;gap:.75rem;align-items:flex-end;">
         <div style="flex:1">
             <label style="display:block;margin-bottom:.25rem;font-size:.9rem;">
                 6-stelliger Code aus Garmin-App:
@@ -31,7 +31,7 @@
         Letzte Sammlung: {{ last_collection }}
     </p>
     {% endif %}
-    <form method="POST" action="/garmin/collect">
+    <form method="POST" action="garmin/collect">
         <button type="submit"
             style="background:var(--surface2);color:var(--text);border:1px solid #444;padding:.5rem 1.5rem;border-radius:6px;cursor:pointer;">
             ▶ Garmin-Daten jetzt sammeln
@@ -59,7 +59,7 @@
     </div>
     {% endif %}
 
-    <form method="POST" action="/analysis/trigger" id="analysis-form">
+    <form method="POST" action="analysis/trigger" id="analysis-form">
         <button type="submit" id="analyse-btn"
             style="background:var(--accent);color:white;border:none;padding:.5rem 1.5rem;border-radius:6px;cursor:pointer;">
             🧠 Analyse jetzt starten
@@ -87,10 +87,11 @@ document.getElementById('analysis-form').addEventListener('submit', function(e) 
     logDiv.textContent = '';
 
     // POST trigger
-    fetch('/analysis/trigger', { method: 'POST' })
+    const _base = "{{ request.scope.get('root_path', '') }}";
+    fetch(_base + '/analysis/trigger', { method: 'POST' })
         .then(() => {
             // SSE verbinden
-            const source = new EventSource('/analysis/stream');
+            const source = new EventSource(_base + '/analysis/stream');
             source.onmessage = function(e) {
                 if (e.data === '[DONE]') {
                     source.close();

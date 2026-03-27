@@ -4,7 +4,7 @@
 {% if mode == "list" %}
 <div class="card">
   <h2>📅 Events</h2>
-  <a href="/events/new" style="display:inline-block;margin-bottom:1rem;padding:.5rem 1rem;background:var(--accent);color:#fff;border-radius:6px;text-decoration:none;font-size:.9rem;">+ Neues Event</a>
+  <a href="events/new" style="display:inline-block;margin-bottom:1rem;padding:.5rem 1rem;background:var(--accent);color:#fff;border-radius:6px;text-decoration:none;font-size:.9rem;">+ Neues Event</a>
 
   {% if events %}
   <table style="width:100%;border-collapse:collapse;font-size:.9rem;">
@@ -40,8 +40,8 @@
       </td>
       <td style="padding:.5rem;color:#aaa;font-size:.85rem;">{{ ev.status }}</td>
       <td style="padding:.5rem;">
-        <a href="/events/{{ ev.id }}/edit" style="color:#4caf50;font-size:.85rem;margin-right:.5rem;">✏️</a>
-        <form method="post" action="/events/{{ ev.id }}/delete" style="display:inline;"
+        <a href="events/{{ ev.id }}/edit" style="color:#4caf50;font-size:.85rem;margin-right:.5rem;">✏️</a>
+        <form method="post" action="events/{{ ev.id }}/delete" style="display:inline;"
               onsubmit="return confirm('Event löschen?')">
           <button type="submit" style="background:none;border:none;cursor:pointer;color:#f44336;font-size:.85rem;">🗑️</button>
         </form>
@@ -51,7 +51,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="placeholder">Noch keine Events. <a href="/events/new" style="color:var(--accent);">Erstes Event anlegen →</a></p>
+  <p class="placeholder">Noch keine Events. <a href="events/new" style="color:var(--accent);">Erstes Event anlegen →</a></p>
   {% endif %}
 </div>
 
@@ -59,7 +59,7 @@
 {# Formular: new oder edit #}
 <div class="card" style="max-width:600px;">
   <h2>{% if mode == 'edit' %}✏️ Event bearbeiten{% else %}➕ Neues Event{% endif %}</h2>
-  <form method="post" action="{% if mode == 'edit' %}/events/{{ event.id }}/edit{% else %}/events/new{% endif %}"
+  <form method="post" action="{% if mode == 'edit' %}events/{{ event.id }}/edit{% else %}events/new{% endif %}"
         style="display:flex;flex-direction:column;gap:1rem;margin-top:1rem;">
 
     <div>
@@ -124,7 +124,7 @@
               style="padding:.6rem 1.5rem;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.9rem;">
         {% if mode == 'edit' %}Speichern{% else %}Erstellen{% endif %}
       </button>
-      <a href="/events" style="padding:.6rem 1rem;color:#aaa;text-decoration:none;font-size:.9rem;">Abbrechen</a>
+      <a href="events" style="padding:.6rem 1rem;color:#aaa;text-decoration:none;font-size:.9rem;">Abbrechen</a>
     </div>
   </form>
 </div>

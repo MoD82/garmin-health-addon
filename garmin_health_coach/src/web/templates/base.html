@@ -22,12 +22,12 @@
 <body>
     <nav>
         <span class="brand">🚴 Garmin Coach</span>
-        <a href="/" class="{% if title == 'Dashboard' %}active{% endif %}">Dashboard</a>
-        <a href="/calendar" class="{% if title == 'Kalender' %}active{% endif %}">Kalender</a>
-        <a href="/events" class="{% if title == 'Events' %}active{% endif %}">Events</a>
-        <a href="/trends" class="{% if title == 'Trends' %}active{% endif %}">Trends</a>
-        <a href="/manual" class="{% if title == 'Manuell' %}active{% endif %}">Manuell</a>
-        <a href="/settings" class="{% if title == 'Einstellungen' %}active{% endif %}">Einstellungen</a>
+        <a href="" class="{% if title == 'Dashboard' %}active{% endif %}">Dashboard</a>
+        <a href="calendar" class="{% if title == 'Kalender' %}active{% endif %}">Kalender</a>
+        <a href="events" class="{% if title == 'Events' %}active{% endif %}">Events</a>
+        <a href="trends" class="{% if title == 'Trends' %}active{% endif %}">Trends</a>
+        <a href="manual" class="{% if title == 'Manuell' %}active{% endif %}">Manuell</a>
+        <a href="settings" class="{% if title == 'Einstellungen' %}active{% endif %}">Einstellungen</a>
     </nav>
     <main>{% block content %}{% endblock %}</main>
 </body>

@@ -26,7 +26,7 @@ def test_dashboard_has_form_widget(client):
 def test_dashboard_has_trends_link(client):
     """Link zu /trends ist vorhanden."""
     resp = client.get("/")
-    assert "/trends" in resp.text
+    assert 'href="trends"' in resp.text
 
 
 def test_dashboard_has_recovery_score(client):
