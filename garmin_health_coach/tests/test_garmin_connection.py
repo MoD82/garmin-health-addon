@@ -351,3 +351,30 @@ def test_connect_stream_sendet_fortschrittsmeldungen(tmp_path):
     assert "Prüfe Zugangsdaten" in content
     assert "Verbinde mit Garmin" in content
     assert "Login läuft" in content
+
+
+# ── Template Tests ─────────────────────────────────────────────────────────
+
+def test_settings_hat_garmin_status_banner(client_with_config):
+    """Settings-Seite enthält den Garmin-Status-Banner."""
+    resp = client_with_config.get("/settings")
+    assert resp.status_code == 200
+    assert "garmin-status" in resp.text
+
+
+def test_settings_hat_verbindung_testen_button(client_with_config):
+    """Settings-Seite enthält den 'Verbindung testen'-Button."""
+    resp = client_with_config.get("/settings")
+    assert "connect-btn" in resp.text
+    assert "Verbindung testen" in resp.text
+
+
+def test_settings_hat_relative_js_urls(client_with_config):
+    """JS-URLs im Template sind relativ (kein führendes /)."""
+    resp = client_with_config.get("/settings")
+    # Relative Pfade vorhanden
+    assert "garmin/status" in resp.text
+    assert "garmin/connect-stream" in resp.text
+    # Keine absoluten Pfade für diese Endpunkte
+    assert "fetch('/garmin" not in resp.text
+    assert "EventSource('/garmin" not in resp.text

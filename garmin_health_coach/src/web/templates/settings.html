@@ -1,5 +1,81 @@
 {% extends "base.html" %}
 {% block content %}
+<div class="card" style="margin-bottom:1rem;">
+    <h2>🔗 Garmin Verbindung</h2>
+    <div id="garmin-status" style="padding:.6rem 1rem;border-radius:6px;background:#1a1a2e;color:#aaa;margin-bottom:.75rem;">
+        ⏳ Verbindung wird geprüft...
+    </div>
+    <button id="connect-btn" type="button"
+        style="background:var(--accent);color:white;border:none;padding:.6rem 1.5rem;border-radius:8px;font-size:.95rem;cursor:pointer;">
+        🔌 Verbindung testen
+    </button>
+    <div id="connect-log" style="margin-top:.75rem;font-size:.9rem;color:#bbb;white-space:pre-line;"></div>
+</div>
+
+<script>
+(function() {
+    const statusEl = document.getElementById('garmin-status');
+    const connectBtn = document.getElementById('connect-btn');
+    const connectLog = document.getElementById('connect-log');
+
+    const COLOR_MAP = {
+        green:  {bg: '#1e3a1e', color: '#4caf50'},
+        yellow: {bg: '#3a3a1e', color: '#ffc107'},
+        orange: {bg: '#3a2a1e', color: '#ff9800'},
+        red:    {bg: '#3a1e1e', color: '#f44336'},
+        gray:   {bg: '#2a2a2a', color: '#9e9e9e'},
+    };
+
+    // Status beim Laden abrufen
+    fetch('garmin/status')
+        .then(r => r.json())
+        .then(data => {
+            const c = COLOR_MAP[data.color] || COLOR_MAP.gray;
+            statusEl.style.background = c.bg;
+            statusEl.style.color = c.color;
+            statusEl.textContent = data.label + (data.detail ? ' — ' + data.detail : '');
+        })
+        .catch(() => {
+            statusEl.textContent = '⚠️ Status konnte nicht geladen werden';
+        });
+
+    // Verbindung testen via SSE
+    connectBtn.addEventListener('click', function() {
+        connectBtn.disabled = true;
+        connectLog.textContent = '';
+
+        const source = new EventSource('garmin/connect-stream');
+
+        source.onmessage = function(e) {
+            if (e.data === '[DONE]') {
+                source.close();
+                connectBtn.disabled = false;
+                // Status nach Test aktualisieren
+                fetch('garmin/status')
+                    .then(r => r.json())
+                    .then(data => {
+                        const c = COLOR_MAP[data.color] || COLOR_MAP.gray;
+                        statusEl.style.background = c.bg;
+                        statusEl.style.color = c.color;
+                        statusEl.textContent = data.label + (data.detail ? ' — ' + data.detail : '');
+                    })
+                    .catch(() => {
+                        statusEl.textContent = '⚠️ Status konnte nicht aktualisiert werden';
+                    });
+                return;
+            }
+            connectLog.textContent += e.data + '\n';
+        };
+
+        source.onerror = function() {
+            source.close();
+            connectBtn.disabled = false;
+            connectLog.textContent += '⚠️ Verbindung zum Server unterbrochen\n';
+        };
+    });
+})();
+</script>
+
 <form method="POST" action="settings">
     {% if saved %}
     <div style="background:#1e3a1e;color:#4caf50;padding:.75rem 1rem;border-radius:8px;margin-bottom:1rem;">
