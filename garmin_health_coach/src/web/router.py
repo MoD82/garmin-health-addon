@@ -11,6 +11,12 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 logger = logging.getLogger(__name__)
 
 
+def _redirect(request: Request, path: str) -> RedirectResponse:
+    """RedirectResponse mit Ingress-Basispfad-Prefix."""
+    base = request.scope.get("root_path", "")
+    return RedirectResponse(url=f"{base}{path}", status_code=303)
+
+
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     from datetime import date, timedelta
@@ -148,7 +154,7 @@ async def submit_mfa(request: Request, mfa_code: str = Form(...)):
         request.app.state.mfa_pending = True
         request.app.state.mfa_error = str(exc)
 
-    return RedirectResponse(url="/manual", status_code=303)
+    return _redirect(request, "/manual")
 
 
 @router.post("/garmin/collect")
@@ -158,7 +164,7 @@ async def trigger_collection(request: Request):
     config = request.app.state.config
     trigger_collection_now(config)
     logger.info("Manuelle Datensammlung ausgelöst")
-    return RedirectResponse(url="/manual", status_code=303)
+    return _redirect(request, "/manual")
 
 
 @router.post("/analysis/trigger")
@@ -166,7 +172,7 @@ async def trigger_analysis(request: Request):
     """Startet manuell eine Analyse (SSE-fähig via /analysis/stream)."""
     if getattr(request.app.state, "analysis_running", False):
         logger.info("Analyse läuft bereits — zweiten Start ignoriert")
-        return RedirectResponse(url="/manual", status_code=303)
+        return _redirect(request, "/manual")
 
     from src.settings.manager import SettingsManager
     from src.analysis.run_analysis import run_analysis
@@ -197,7 +203,7 @@ async def trigger_analysis(request: Request):
 
     asyncio.create_task(run_analysis_task())
     logger.info("Analyse-Task gestartet")
-    return RedirectResponse(url="/manual", status_code=303)
+    return _redirect(request, "/manual")
 
 
 @router.get("/analysis/stream")
@@ -255,7 +261,7 @@ async def save_settings(request: Request):
         if key in form:
             await mgr.set(key, str(form[key]))
     logger.info("Einstellungen gespeichert")
-    return RedirectResponse(url="/settings?saved=1", status_code=303)
+    return _redirect(request, "/settings?saved=1")
 
 
 # ── EVENTS ────────────────────────────────────────────────────────────────
@@ -303,7 +309,7 @@ async def events_create(
         "goal": goal or None,
         "training_possible": training_possible == "1",
     })
-    return RedirectResponse(url="/events", status_code=303)
+    return _redirect(request, "/events")
 
 
 @router.get("/events/{event_id}/edit", response_class=HTMLResponse)
@@ -311,7 +317,7 @@ async def events_edit_form(request: Request, event_id: int):
     from src.storage.events_repo import EventsRepo
     event = await EventsRepo().get(event_id)
     if not event:
-        return RedirectResponse(url="/events", status_code=303)
+        return _redirect(request, "/events")
     return templates.TemplateResponse(
         request, "events.html",
         {"title": "Events", "events": [], "mode": "edit", "event": event},
@@ -344,14 +350,14 @@ async def events_update(
         "goal": goal or None,
         "training_possible": training_possible == "1",
     })
-    return RedirectResponse(url="/events", status_code=303)
+    return _redirect(request, "/events")
 
 
 @router.post("/events/{event_id}/delete")
 async def events_delete(request: Request, event_id: int):
     from src.storage.events_repo import EventsRepo
     await EventsRepo().delete(event_id)
-    return RedirectResponse(url="/events", status_code=303)
+    return _redirect(request, "/events")
 
 
 @router.get("/trends", response_class=HTMLResponse)

@@ -30,3 +30,26 @@ def test_no_ingress_header_uses_empty_base(client):
     resp = client.get("/", follow_redirects=True)
     assert resp.status_code == 200
     assert '<base href="/">' in resp.text
+
+
+def test_redirect_includes_ingress_path(client):
+    """POST /settings mit Ingress-Header → Redirect enthält Ingress-Pfad."""
+    resp = client.post(
+        "/settings",
+        data={},
+        headers={"X-Ingress-Path": "/api/hassio_ingress/TOKEN123"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"].startswith("/api/hassio_ingress/TOKEN123")
+
+
+def test_redirect_without_ingress_uses_absolute_path(client):
+    """POST /settings ohne Header → Redirect ist normaler absoluter Pfad."""
+    resp = client.post(
+        "/settings",
+        data={},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/settings?saved=1"
