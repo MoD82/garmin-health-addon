@@ -333,6 +333,49 @@ async def garmin_status(request: Request):
     }
 
 
+@router.get("/garmin/connect-stream")
+async def garmin_connect_stream(request: Request):
+    """SSE-Stream: Testet Garmin-Login live und sendet Fortschritt."""
+    config = request.app.state.config
+
+    async def generate():
+        yield "data: ⏳ Prüfe Zugangsdaten...\n\n"
+
+        if not config.garmin_user or not config.garmin_password:
+            yield "data: ❌ Keine Garmin-Zugangsdaten konfiguriert\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        yield "data: ⏳ Verbinde mit Garmin...\n\n"
+        import src.collector.garmin_client as _gc_mod
+        client = _gc_mod.GarminClient(
+            email=config.garmin_user,
+            password=config.garmin_password,
+            token_path=_gc_mod.DEFAULT_TOKEN_PATH,
+        )
+
+        yield "data: ⏳ Login läuft...\n\n"
+        try:
+            result = await asyncio.to_thread(client.test_connection)
+        except Exception as exc:
+            yield f"data: ❌ Interner Fehler: {exc}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        if result["success"]:
+            yield "data: ✅ Erfolgreich verbunden — Token gespeichert\n\n"
+        else:
+            yield f"data: ❌ {result['message']}\n\n"
+
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 # ── EVENTS ────────────────────────────────────────────────────────────────
 
 @router.get("/events", response_class=HTMLResponse)

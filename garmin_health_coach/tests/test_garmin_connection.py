@@ -256,3 +256,98 @@ def test_status_json_hat_alle_felder(client_no_config):
     assert "label" in data
     assert "detail" in data
     assert "color" in data
+
+
+# ── SSE Connect-Stream Tests ───────────────────────────────────────────────
+
+def test_connect_stream_keine_credentials(client_no_config):
+    """Keine Credentials → SSE enthält Fehlermeldung."""
+    with client_no_config.stream("GET", "/garmin/connect-stream") as r:
+        assert r.headers["content-type"].startswith("text/event-stream")
+        content = r.read().decode()
+    assert "Keine Garmin-Zugangsdaten" in content
+    assert "[DONE]" in content
+
+
+def test_connect_stream_erfolg(tmp_path):
+    """Erfolgreicher Login → SSE enthält 'Erfolgreich'."""
+    db_path = tmp_path / "test.db"
+    token_path = tmp_path / "garmin_token.json"
+
+    with patch("src.storage.database.DB_PATH", db_path), \
+         patch("src.collector.garmin_client.DEFAULT_TOKEN_PATH", token_path), \
+         patch("src.scheduler.start_scheduler"), \
+         patch("src.scheduler.stop_scheduler"), \
+         patch("src.collector.garmin_client.Garmin") as MockGarmin:
+
+        mock_instance = MockGarmin.return_value
+        mock_instance.login.return_value = None
+        mock_instance.garth.oauth2_token = {"access_token": "tok"}
+
+        from src.main import app
+        from src.config import Config
+        cfg = Config(garmin_user="user@test.de", garmin_password="secret")
+
+        with patch("src.main.load_config", return_value=cfg):
+            with TestClient(app) as c:
+                with c.stream("GET", "/garmin/connect-stream") as r:
+                    content = r.read().decode()
+
+    assert "Erfolgreich" in content
+    assert "[DONE]" in content
+
+
+def test_connect_stream_ungueltige_credentials(tmp_path):
+    """Falsches Passwort → SSE enthält 'Falscher Benutzername'."""
+    db_path = tmp_path / "test.db"
+    token_path = tmp_path / "garmin_token.json"
+
+    with patch("src.storage.database.DB_PATH", db_path), \
+         patch("src.collector.garmin_client.DEFAULT_TOKEN_PATH", token_path), \
+         patch("src.scheduler.start_scheduler"), \
+         patch("src.scheduler.stop_scheduler"), \
+         patch("src.collector.garmin_client.Garmin") as MockGarmin:
+
+        mock_instance = MockGarmin.return_value
+        mock_instance.login.side_effect = Exception("401 Unauthorized")
+
+        from src.main import app
+        from src.config import Config
+        cfg = Config(garmin_user="user@test.de", garmin_password="falsch")
+
+        with patch("src.main.load_config", return_value=cfg):
+            with TestClient(app) as c:
+                with c.stream("GET", "/garmin/connect-stream") as r:
+                    content = r.read().decode()
+
+    assert "Falscher Benutzername" in content
+    assert "[DONE]" in content
+
+
+def test_connect_stream_sendet_fortschrittsmeldungen(tmp_path):
+    """SSE-Stream sendet Schritt-für-Schritt-Meldungen."""
+    db_path = tmp_path / "test.db"
+    token_path = tmp_path / "garmin_token.json"
+
+    with patch("src.storage.database.DB_PATH", db_path), \
+         patch("src.collector.garmin_client.DEFAULT_TOKEN_PATH", token_path), \
+         patch("src.scheduler.start_scheduler"), \
+         patch("src.scheduler.stop_scheduler"), \
+         patch("src.collector.garmin_client.Garmin") as MockGarmin:
+
+        mock_instance = MockGarmin.return_value
+        mock_instance.login.return_value = None
+        mock_instance.garth.oauth2_token = {"access_token": "tok"}
+
+        from src.main import app
+        from src.config import Config
+        cfg = Config(garmin_user="user@test.de", garmin_password="secret")
+
+        with patch("src.main.load_config", return_value=cfg):
+            with TestClient(app) as c:
+                with c.stream("GET", "/garmin/connect-stream") as r:
+                    content = r.read().decode()
+
+    assert "Prüfe Zugangsdaten" in content
+    assert "Verbinde mit Garmin" in content
+    assert "Login läuft" in content
