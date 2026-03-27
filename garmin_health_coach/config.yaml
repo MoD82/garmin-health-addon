@@ -1,6 +1,6 @@
 name: "Garmin Health Coach"
 description: "Professioneller Rad- und Gesundheitscoach mit GPT-4o — vollautomatisch."
-version: "1.0.1"
+version: "1.0.2"
 slug: "garmin_health_coach"
 init: false
 arch:
