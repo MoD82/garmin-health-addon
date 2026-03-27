@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="{{ request.scope.get('root_path', '') }}/">
     <title>🚴 Garmin Coach — {{ title }}</title>
     <style>
         :root { --green:#4caf50;--yellow:#ff9800;--red:#f44336;--bg:#1a1a2e;--surface:#16213e;--surface2:#0f3460;--text:#e0e0e0;--accent:#e94560; }

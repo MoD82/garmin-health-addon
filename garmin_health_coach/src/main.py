@@ -2,7 +2,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from .config import load_config
@@ -34,8 +34,15 @@ app = FastAPI(
     title="Garmin Health Coach",
     version="1.0.0",
     lifespan=lifespan,
-    root_path=os.environ.get("INGRESS_PATH", ""),
 )
+
+
+@app.middleware("http")
+async def ingress_middleware(request: Request, call_next):
+    ingress_path = request.headers.get("X-Ingress-Path", "")
+    request.scope["root_path"] = ingress_path
+    return await call_next(request)
+
 
 app.include_router(web_router)
 
