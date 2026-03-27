@@ -1,6 +1,6 @@
 name: "Garmin Health Coach"
 description: "Professioneller Rad- und Gesundheitscoach mit GPT-4o — vollautomatisch."
-version: "1.0.3"
+version: "1.0.4"
 slug: "garmin_health_coach"
 init: false
 arch:
@@ -8,10 +8,8 @@ arch:
   - amd64
 startup: application
 boot: auto
-ingress: true
-ingress_port: 8099
-panel_icon: "mdi:bike"
-panel_title: "Garmin Coach"
+ports:
+  8099/tcp: 8099
 watchdog: "http://[HOST]:[PORT:8099]/health"
 options:
   openai_api_key: ""
