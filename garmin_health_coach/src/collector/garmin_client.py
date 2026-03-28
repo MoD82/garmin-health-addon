@@ -1,5 +1,4 @@
 """Garmin Connect Client — Login, Token-Caching, MFA-Handling."""
-import json
 import logging
 from pathlib import Path
 from typing import Optional
@@ -8,7 +7,8 @@ from garminconnect import Garmin
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_TOKEN_PATH = Path("/data/garmin_token.json")
+# Verzeichnis für garth dump/load (oauth1_token.json + oauth2_token.json)
+DEFAULT_TOKEN_PATH = Path("/data/garmin_tokens")
 
 
 class MFAPendingError(Exception):
@@ -21,12 +21,11 @@ class GarminClient:
     Attributes:
         email: Garmin-Account E-Mail.
         password: Garmin-Account Passwort.
-        token_path: Pfad zur Token-Cache-Datei.
+        token_path: Verzeichnis für Token-Cache (garth dump/load).
         _logged_in: True nach erfolgreichem Login.
         _client: garminconnect.Garmin Instanz.
+        _mfa_state: client_state von garth.sso.login() bei MFA-Pending.
     """
-
-    _mfa_exception_pattern = "MFA"  # Suchstring in Exception-Message
 
     def __init__(
         self,
@@ -39,25 +38,23 @@ class GarminClient:
         self.token_path = token_path
         self._logged_in = False
         self._client: Optional[Garmin] = None
+        self._mfa_state: Optional[dict] = None
 
     # ------------------------------------------------------------------
     # Token-Verwaltung
     # ------------------------------------------------------------------
 
-    def _save_token(self, token: dict) -> None:
-        """Speichert OAuth2-Token als JSON-Datei."""
-        self.token_path.write_text(json.dumps(token))
-        logger.debug("Garmin Token gespeichert: %s", self.token_path)
+    def _has_token(self) -> bool:
+        """Prüft ob Token-Cache-Verzeichnis mit beiden garth-Dateien existiert."""
+        return (
+            (self.token_path / "oauth1_token.json").exists()
+            and (self.token_path / "oauth2_token.json").exists()
+        )
 
-    def _load_token(self) -> Optional[dict]:
-        """Lädt Token aus Cache-Datei. Gibt None bei Fehler zurück."""
-        if not self.token_path.exists():
-            return None
-        try:
-            return json.loads(self.token_path.read_text())
-        except (json.JSONDecodeError, OSError) as exc:
-            logger.warning("Token-Datei ungültig, ignoriert: %s", exc)
-            return None
+    def _save_token(self, garth_client) -> None:
+        """Speichert Tokens via garth.dump() in token_path-Verzeichnis."""
+        garth_client.dump(str(self.token_path))
+        logger.debug("Garmin Token gespeichert: %s", self.token_path)
 
     # ------------------------------------------------------------------
     # Login
@@ -73,41 +70,45 @@ class GarminClient:
             MFAPendingError: Garmin fordert MFA-Code an.
             RuntimeError: Login schlägt aus anderen Gründen fehl.
         """
-        cached = self._load_token()
-        token_path_str = str(self.token_path) if cached else None
-
         try:
-            if token_path_str:
+            self._client = Garmin(email=self.email, password=self.password)
+
+            if self._has_token():
                 logger.info("Versuche Login mit gecachtem Token")
-                self._client = Garmin(
-                    email=self.email,
-                    password=self.password,
-                    tokenstore=token_path_str,
-                )
+                self._client.login(tokenstore=str(self.token_path))
             else:
                 logger.info("Kein Token-Cache — Neu-Login mit Credentials")
-                self._client = Garmin(
-                    email=self.email,
-                    password=self.password,
+                from garth import sso as _sso
+
+                result = _sso.login(
+                    self.email,
+                    self.password,
+                    client=self._client.garth,
+                    return_on_mfa=True,
                 )
+                if result[0] == "needs_mfa":
+                    self._mfa_state = result[1]
+                    logger.warning("Garmin fordert MFA — Web-UI-Eingabe nötig")
+                    raise MFAPendingError("MFA-Code erforderlich")
 
-            self._client.login()
+                # Tokens in garth-Client setzen
+                self._client.garth.oauth1_token, self._client.garth.oauth2_token = result
+                # Profile laden (entspricht garminconnect.Garmin.login())
+                self._client.display_name = self._client.garth.profile["displayName"]
+                self._client.full_name = self._client.garth.profile["fullName"]
+                settings = self._client.garth.connectapi(
+                    self._client.garmin_connect_user_settings_url
+                )
+                self._client.unit_system = settings["userData"]["measurementSystem"]
+
             self._logged_in = True
-
             # Token nach erfolgreichem Login speichern/aktualisieren
-            try:
-                token = self._client.garth.oauth2_token
-                if token:
-                    self._save_token(dict(token))
-            except AttributeError:
-                logger.debug("Token-Zugriff nicht möglich, wird übersprungen")
-
+            self._save_token(self._client.garth)
             logger.info("Garmin Login erfolgreich")
 
+        except MFAPendingError:
+            raise
         except Exception as exc:
-            if self._mfa_exception_pattern in str(exc):
-                logger.warning("Garmin fordert MFA — Web-UI-Eingabe nötig")
-                raise MFAPendingError("MFA-Code erforderlich") from exc
             logger.error("Garmin Login fehlgeschlagen: %s", exc)
             raise RuntimeError(f"Garmin Login Fehler: {exc}") from exc
 
@@ -120,17 +121,24 @@ class GarminClient:
         Raises:
             RuntimeError: MFA-Übermittlung fehlgeschlagen.
         """
-        if self._client is None:
-            raise RuntimeError("submit_mfa() ohne vorherigen ensure_logged_in() aufgerufen")
+        if self._client is None or self._mfa_state is None:
+            raise RuntimeError("submit_mfa() ohne MFA-Pending-State aufgerufen")
         try:
-            self._client.login(mfa_code)
+            from garth import sso as _sso
+
+            oauth1, oauth2 = _sso.resume_login(self._mfa_state, mfa_code)
+            self._client.garth.oauth1_token = oauth1
+            self._client.garth.oauth2_token = oauth2
+            # Profile laden
+            self._client.display_name = self._client.garth.profile["displayName"]
+            self._client.full_name = self._client.garth.profile["fullName"]
+            settings = self._client.garth.connectapi(
+                self._client.garmin_connect_user_settings_url
+            )
+            self._client.unit_system = settings["userData"]["measurementSystem"]
             self._logged_in = True
-            try:
-                token = self._client.garth.oauth2_token
-                if token:
-                    self._save_token(dict(token))
-            except AttributeError:
-                pass
+            self._mfa_state = None
+            self._save_token(self._client.garth)
             logger.info("MFA erfolgreich — Garmin Login abgeschlossen")
         except Exception as exc:
             logger.error("MFA-Fehler: %s", exc)
@@ -149,9 +157,6 @@ class GarminClient:
 
     def test_connection(self) -> dict:
         """Ruft ensure_logged_in() auf und gibt strukturiertes Ergebnis zurück.
-
-        Fängt MFAPendingError separat (bevor RuntimeError-Wrap greift).
-        String-Mapping von str(exc) auf error_type erfolgt hier.
 
         Returns:
             dict mit Feldern:

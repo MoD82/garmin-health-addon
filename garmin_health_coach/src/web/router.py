@@ -131,24 +131,34 @@ async def manual_page(request: Request):
 async def submit_mfa(request: Request, mfa_code: str = Form(...)):
     """Verarbeitet MFA-Code-Eingabe aus Web-UI."""
     config = request.app.state.config
-    from src.collector.garmin_client import GarminClient
+    client = getattr(request.app.state, "garmin_client", None)
+
+    if client is None:
+        # Kein MFA-Pending-State — direkt neuen Login versuchen
+        from src.collector.garmin_client import GarminClient
+        client = GarminClient(email=config.garmin_user, password=config.garmin_password)
+        try:
+            client.ensure_logged_in()
+            request.app.state.mfa_pending = False
+            request.app.state.mfa_error = None
+            logger.info("Login ohne MFA erfolgreich")
+            from src.collector.run_collection import collect_all
+            asyncio.create_task(collect_all(config))
+        except Exception as exc:
+            logger.error("Login-Fehler: %s", exc)
+            request.app.state.mfa_pending = True
+            request.app.state.mfa_error = str(exc)
+        return _redirect(request, "/manual")
 
     try:
-        client = GarminClient(
-            email=config.garmin_user,
-            password=config.garmin_password,
-        )
-        client.ensure_logged_in()
-        client.submit_mfa(mfa_code)
+        await asyncio.to_thread(client.submit_mfa, mfa_code)
         request.app.state.mfa_pending = False
         request.app.state.mfa_error = None
+        request.app.state.garmin_client = None
         logger.info("MFA erfolgreich eingegeben")
-
         # Sofortige Datensammlung nach MFA
         from src.collector.run_collection import collect_all
-        import asyncio
         asyncio.create_task(collect_all(config))
-
     except Exception as exc:
         logger.error("MFA-Fehler: %s", exc)
         request.app.state.mfa_pending = True

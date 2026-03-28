@@ -2,7 +2,7 @@
 import pytest
 import aiosqlite
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from src.config import Config
 
@@ -278,11 +278,11 @@ def test_connect_stream_erfolg(tmp_path):
          patch("src.collector.garmin_client.DEFAULT_TOKEN_PATH", token_path), \
          patch("src.scheduler.start_scheduler"), \
          patch("src.scheduler.stop_scheduler"), \
-         patch("src.collector.garmin_client.Garmin") as MockGarmin:
+         patch("src.collector.garmin_client.Garmin") as MockGarmin, \
+         patch("garth.sso.login") as mock_sso_login:
 
-        mock_instance = MockGarmin.return_value
-        mock_instance.login.return_value = None
-        mock_instance.garth.oauth2_token = {"access_token": "tok"}
+        MockGarmin.return_value = MagicMock()
+        mock_sso_login.return_value = (MagicMock(), MagicMock())
 
         from src.main import app
         from src.config import Config
@@ -306,10 +306,11 @@ def test_connect_stream_ungueltige_credentials(tmp_path):
          patch("src.collector.garmin_client.DEFAULT_TOKEN_PATH", token_path), \
          patch("src.scheduler.start_scheduler"), \
          patch("src.scheduler.stop_scheduler"), \
-         patch("src.collector.garmin_client.Garmin") as MockGarmin:
+         patch("src.collector.garmin_client.Garmin") as MockGarmin, \
+         patch("garth.sso.login") as mock_sso_login:
 
-        mock_instance = MockGarmin.return_value
-        mock_instance.login.side_effect = Exception("401 Unauthorized")
+        MockGarmin.return_value = MagicMock()
+        mock_sso_login.side_effect = Exception("401 Unauthorized")
 
         from src.main import app
         from src.config import Config
@@ -333,11 +334,11 @@ def test_connect_stream_sendet_fortschrittsmeldungen(tmp_path):
          patch("src.collector.garmin_client.DEFAULT_TOKEN_PATH", token_path), \
          patch("src.scheduler.start_scheduler"), \
          patch("src.scheduler.stop_scheduler"), \
-         patch("src.collector.garmin_client.Garmin") as MockGarmin:
+         patch("src.collector.garmin_client.Garmin") as MockGarmin, \
+         patch("garth.sso.login") as mock_sso_login:
 
-        mock_instance = MockGarmin.return_value
-        mock_instance.login.return_value = None
-        mock_instance.garth.oauth2_token = {"access_token": "tok"}
+        MockGarmin.return_value = MagicMock()
+        mock_sso_login.return_value = (MagicMock(), MagicMock())
 
         from src.main import app
         from src.config import Config
