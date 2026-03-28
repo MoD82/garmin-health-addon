@@ -352,6 +352,36 @@ async def garmin_status(request: Request):
     }
 
 
+@router.post("/garmin/import-tokens")
+async def import_tokens(request: Request, token_json: str = Form(...)):
+    """Importiert OAuth-Tokens aus garmin_token_helper.py (Playwright-Skript)."""
+    import json as _json
+    from src.collector.garmin_client import DEFAULT_TOKEN_PATH
+
+    try:
+        data = _json.loads(token_json)
+    except _json.JSONDecodeError as exc:
+        request.app.state.token_import_error = f"Ungültiges JSON: {exc}"
+        return _redirect(request, "/manual")
+
+    if "oauth1_token" not in data or "oauth2_token" not in data:
+        request.app.state.token_import_error = (
+            "JSON muss 'oauth1_token' und 'oauth2_token' enthalten"
+        )
+        return _redirect(request, "/manual")
+
+    DEFAULT_TOKEN_PATH.mkdir(parents=True, exist_ok=True)
+    (DEFAULT_TOKEN_PATH / "oauth1_token.json").write_text(
+        _json.dumps(data["oauth1_token"])
+    )
+    (DEFAULT_TOKEN_PATH / "oauth2_token.json").write_text(
+        _json.dumps(data["oauth2_token"])
+    )
+    request.app.state.token_import_error = None
+    logger.info("Garmin Tokens erfolgreich importiert")
+    return _redirect(request, "/manual?token_imported=1")
+
+
 @router.get("/garmin/connect-stream")
 async def garmin_connect_stream(request: Request):
     """SSE-Stream: Testet Garmin-Login live und sendet Fortschritt."""

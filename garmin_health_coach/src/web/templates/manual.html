@@ -25,6 +25,31 @@
 {% endif %}
 
 <div class="card">
+    <h2>🔑 Token-Import</h2>
+    <p style="font-size:.85rem;color:#aaa;margin-bottom:.75rem;">
+        Garmin blockiert programmatische Logins für ältere Accounts.<br>
+        Lösung: <code>tools/garmin_token_helper.py</code> einmalig auf dem PC ausführen,
+        JSON-Inhalt hier einfügen.
+    </p>
+    {% if request.query_params.get('token_imported') == '1' %}
+    <div style="color:var(--green);margin-bottom:.75rem;">✅ Tokens erfolgreich importiert</div>
+    {% endif %}
+    {% set import_error = request.app.state.token_import_error if request.app.state is defined else None %}
+    {% if import_error %}
+    <div style="color:var(--red);margin-bottom:.75rem;">❌ {{ import_error }}</div>
+    {% endif %}
+    <form method="POST" action="garmin/import-tokens">
+        <textarea name="token_json" rows="6"
+            placeholder='{"oauth1_token": {...}, "oauth2_token": {...}}'
+            style="width:100%;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:6px;padding:.5rem .75rem;font-family:monospace;font-size:.8rem;box-sizing:border-box;resize:vertical;"></textarea>
+        <button type="submit"
+            style="margin-top:.5rem;background:var(--accent);color:white;border:none;padding:.5rem 1.5rem;border-radius:6px;cursor:pointer;">
+            Token importieren
+        </button>
+    </form>
+</div>
+
+<div class="card">
     <h2>🔄 Datensammlung</h2>
     {% if last_collection %}
     <p style="font-size:.85rem;color:#aaa;margin-bottom:.75rem;">
