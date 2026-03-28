@@ -12,6 +12,9 @@
     <a id="mfa-link" href="manual" style="display:none;background:var(--accent);color:white;text-decoration:none;padding:.6rem 1.5rem;border-radius:8px;font-size:.95rem;">
         🔐 MFA-Code eingeben →
     </a>
+    <div id="rate-limit-hint" style="display:none;padding:.5rem .75rem;background:#3a1e1e;color:#f44336;border-radius:6px;font-size:.9rem;margin-top:.25rem;">
+        ⏳ Garmin hat zu viele Login-Versuche geblockt. Bitte 2–24 Stunden warten und <strong>nicht erneut versuchen</strong> — jeder Versuch verlängert die Sperre.
+    </div>
     <div id="connect-log" style="margin-top:.75rem;font-size:.9rem;color:#bbb;white-space:pre-line;"></div>
 </div>
 
@@ -20,6 +23,7 @@
     const statusEl = document.getElementById('garmin-status');
     const connectBtn = document.getElementById('connect-btn');
     const mfaLink = document.getElementById('mfa-link');
+    const rateLimitHint = document.getElementById('rate-limit-hint');
     const connectLog = document.getElementById('connect-log');
 
     const COLOR_MAP = {
@@ -35,10 +39,10 @@
         statusEl.style.background = c.bg;
         statusEl.style.color = c.color;
         statusEl.textContent = data.label + (data.detail ? ' — ' + data.detail : '');
-        // Button nur zeigen wenn Credentials vorhanden und kein MFA ausstehend
-        const showBtn = data.state !== 'no_credentials' && data.state !== 'mfa_pending';
-        connectBtn.style.display = showBtn ? 'inline-block' : 'none';
+        const blocked = data.state === 'no_credentials' || data.state === 'mfa_pending' || data.state === 'rate_limited';
+        connectBtn.style.display = blocked ? 'none' : 'inline-block';
         mfaLink.style.display = data.state === 'mfa_pending' ? 'inline-block' : 'none';
+        rateLimitHint.style.display = data.state === 'rate_limited' ? 'block' : 'none';
     }
 
     // Status beim Laden abrufen

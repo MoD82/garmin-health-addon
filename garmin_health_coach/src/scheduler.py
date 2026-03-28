@@ -54,7 +54,12 @@ def trigger_analysis_now(config: Config) -> None:
 
 
 async def _run_collection(config: Config) -> None:
-    """Startet Garmin-Datensammlung über Orchestrator."""
+    """Startet Garmin-Datensammlung — nur wenn collection_mode == 'auto'."""
+    from .settings.manager import SettingsManager
+    mode = await SettingsManager().get("collection_mode")
+    if mode != "auto":
+        logger.info("Sammlung übersprungen (Modus: %s)", mode)
+        return
     from .collector.run_collection import collect_all
     result = await collect_all(config)
     if result["status"] == "mfa_pending":
