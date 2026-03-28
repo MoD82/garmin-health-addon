@@ -66,6 +66,9 @@ async def collect_all(config: Config) -> dict:
         except Exception as exc:
             last_error = exc
             logger.warning("Datensammlung Fehler (Versuch %d): %s", attempt, exc)
+            if "429" in str(exc):
+                logger.warning("Rate-limited (429) — kein Retry, um Sperre nicht zu verlängern")
+                break
             if attempt < config.retry_count:
                 wait_sec = config.retry_interval_minutes * 60
                 logger.info("Warte %d Minuten bis Retry...", config.retry_interval_minutes)
